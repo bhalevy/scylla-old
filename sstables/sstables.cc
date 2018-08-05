@@ -4265,6 +4265,14 @@ future<> init_metrics() {
         sm::make_counter("currently_opened_for_read", [] {
                 return sstables_stats::shard_stats().opened_r - sstables_stats::shard_stats().closed_r;
             }, sm::description("Number of files currently opened for read only")),
+        sm::make_derive("writes", [] { return sstables_stats::shard_stats().writes; },
+            sm::description("Number of file writes")),
+        sm::make_derive("bytes_written", [] { return sstables_stats::shard_stats().bytes_written; },
+            sm::description("Number of bytes written to files")),
+        sm::make_derive("reads", [] { return sstables_stats::shard_stats().reads; },
+            sm::description("Number of file reads")),
+        sm::make_derive("bytes_read", [] { return sstables_stats::shard_stats().bytes_read; },
+            sm::description("Number of bytes read from files")),
     });
   });
 }

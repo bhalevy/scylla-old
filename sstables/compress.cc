@@ -34,6 +34,7 @@
 #include "stdx.hh"
 #include "segmented_compress_params.hh"
 #include "utils/class_registrator.hh"
+#include "stats.hh"
 
 namespace sstables {
 
