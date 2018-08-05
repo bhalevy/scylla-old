@@ -4273,6 +4273,10 @@ future<> init_metrics() {
             sm::description("Number of file reads")),
         sm::make_derive("bytes_read", [] { return sstables_stats::shard_stats().bytes_read; },
             sm::description("Number of bytes read from files")),
+        sm::make_counter("ongoing_writes", [] { return sstables_stats::shard_stats().ongoing_writes; },
+            sm::description("Number of ongoing file writes")),
+        sm::make_counter("ongoing_reads", [] { return sstables_stats::shard_stats().ongoing_reads; },
+            sm::description("Number of ongoing file reads")),
     });
   });
 }

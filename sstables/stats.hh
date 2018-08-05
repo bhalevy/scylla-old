@@ -32,8 +32,10 @@ class sstables_stats {
         uint64_t closed_r = 0; // Number of sstables closed after being opened for read
         uint64_t writes = 0; // Number of writes
         uint64_t bytes_written = 0; // Number of bytes written
+        uint64_t ongoing_writes = 0; // Current ongoing writes
         uint64_t reads = 0; // Number of reads
         uint64_t bytes_read = 0; // Number of bytes read
+        uint64_t ongoing_reads = 0; // Current ongoing reads
     } _shard_stats;
 
 public:
@@ -60,12 +62,30 @@ public:
         }
     };
 
+    static inline void submit_write_begin() {
+        _shard_stats.ongoing_writes++;
+    };
+
+    static inline void submit_write_end() {
+        _shard_stats.ongoing_writes--;
+    };
+
     static inline void submit_write(size_t n) {
+        submit_write_end();
         _shard_stats.writes++;
         _shard_stats.bytes_written += n;
     };
 
+    static inline void submit_read_begin() {
+        _shard_stats.ongoing_reads++;
+    };
+
+    static inline void submit_read_end() {
+        _shard_stats.ongoing_reads--;
+    };
+
     static inline void submit_read(size_t n) {
+        submit_read_end();
         _shard_stats.reads++;
         _shard_stats.bytes_read += n;
     };

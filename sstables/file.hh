@@ -44,34 +44,58 @@ public:
     sstables_file_impl& operator=(sstables_file_impl&&) = default;
 
     virtual future<size_t> write_dma(uint64_t pos, const void* buffer, size_t len, const io_priority_class& pc) override {
+        sstables_stats::submit_write_begin();
         return get_file_impl(_file)->write_dma(pos, buffer, len, pc).then_wrapped([] (future<size_t> f) {
-            size_t size = std::get<0>(f.get());
-            sstables_stats::submit_write(size);
-            return make_ready_future<size_t>(size);
+            try {
+                size_t size = std::get<0>(f.get());
+                sstables_stats::submit_write(size);
+                return make_ready_future<size_t>(size);
+            } catch(...) {
+                sstables_stats::submit_write_end();
+                throw;
+            }
         });
     }
 
     virtual future<size_t> write_dma(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc) override {
+        sstables_stats::submit_write_begin();
         return get_file_impl(_file)->write_dma(pos, std::move(iov), pc).then_wrapped([] (future<size_t> f) {
-            size_t size = std::get<0>(f.get());
-            sstables_stats::submit_write(size);
-            return make_ready_future<size_t>(size);
+            try {
+                size_t size = std::get<0>(f.get());
+                sstables_stats::submit_write(size);
+                return make_ready_future<size_t>(size);
+            } catch(...) {
+                sstables_stats::submit_write_end();
+                throw;
+            }
         });
     }
 
     virtual future<size_t> read_dma(uint64_t pos, void* buffer, size_t len, const io_priority_class& pc) override {
+        sstables_stats::submit_read_begin();
         return get_file_impl(_file)->read_dma(pos, buffer, len, pc).then_wrapped([] (future<size_t> f) {
-            size_t size = std::get<0>(f.get());
-            sstables_stats::submit_read(size);
-            return make_ready_future<size_t>(size);
+            try {
+                size_t size = std::get<0>(f.get());
+                sstables_stats::submit_read(size);
+                return make_ready_future<size_t>(size);
+            } catch(...) {
+                sstables_stats::submit_read_end();
+                throw;
+            }
         });
     }
 
     virtual future<size_t> read_dma(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc) override {
+        sstables_stats::submit_read_begin();
         return get_file_impl(_file)->read_dma(pos, iov, pc).then_wrapped([] (future<size_t> f) {
-            size_t size = std::get<0>(f.get());
-            sstables_stats::submit_read(size);
-            return make_ready_future<size_t>(size);
+            try {
+                size_t size = std::get<0>(f.get());
+                sstables_stats::submit_read(size);
+                return make_ready_future<size_t>(size);
+            } catch(...) {
+                sstables_stats::submit_read_end();
+                throw;
+            }
         });
     }
 
