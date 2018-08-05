@@ -1045,7 +1045,7 @@ void sstable::write_toc(const io_priority_class& pc) {
         // TOC will exist at this point if write_components() was called with
         // the generation of a sstable that exists.
         f.close().get();
-        remove_file(file_path).get();
+        ::remove_file(file_path).get();
         throw std::runtime_error(sprint("SSTable write failed due to existence of TOC file for generation %ld of %s.%s", _generation, _schema->ks_name(), _schema->cf_name()));
     }
 
@@ -3729,14 +3729,14 @@ future<> sstable::create_links(sstring dir, int64_t generation) const {
 
 future<> sstable::set_generation(int64_t new_generation) {
     return create_links(_dir, new_generation).then([this] {
-        return remove_file(filename(component_type::TOC)).then([this] {
+        return ::remove_file(filename(component_type::TOC)).then([this] {
             return sstable_write_io_check(sync_directory, _dir);
         }).then([this] {
             return parallel_for_each(all_components(), [this] (auto p) {
                 if (p.first == component_type::TOC) {
                     return make_ready_future<>();
                 }
-                return remove_file(sstable::filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, p.second));
+                return ::remove_file(sstable::filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, p.second));
             });
         });
     }).then([this, new_generation] {
@@ -4046,7 +4046,7 @@ remove_by_toc_name(sstring sstable_toc_name, const io_error_handler& error_handl
                 return make_ready_future<>();
             }
             auto fname = prefix + component;
-            return sstable_io_check(error_handler, remove_file, prefix + component).then_wrapped([fname = std::move(fname)] (future<> f) {
+            return sstable_io_check(error_handler, ::remove_file, prefix + component).then_wrapped([fname = std::move(fname)] (future<> f) {
                 // forgive ENOENT, since the component may not have been written;
                 try {
                     f.get();
@@ -4060,7 +4060,7 @@ remove_by_toc_name(sstring sstable_toc_name, const io_error_handler& error_handl
             });
         }).get();
         fsync_directory(error_handler, dir).get();
-        sstable_io_check(error_handler, remove_file, new_toc_name).get();
+        sstable_io_check(error_handler, ::remove_file, new_toc_name).get();
     });
 }
 
@@ -4097,11 +4097,11 @@ sstable::remove_sstable_with_temp_toc(sstring ks, sstring cf, sstring dir, int64
             if (!exists) {
                 continue;
             }
-            sstable_io_check(error_handler, remove_file, file_path).get();
+            sstable_io_check(error_handler, ::remove_file, file_path).get();
         }
         fsync_directory(error_handler, dir).get();
         // Removing temporary
-        sstable_io_check(error_handler, remove_file, filename(dir, ks, cf, v, generation, f, component_type::TemporaryTOC)).get();
+        sstable_io_check(error_handler, ::remove_file, filename(dir, ks, cf, v, generation, f, component_type::TemporaryTOC)).get();
         // Fsync'ing column family dir to guarantee that deletion completed.
         fsync_directory(error_handler, dir).get();
     });
@@ -4255,6 +4255,8 @@ future<> init_metrics() {
 
         sm::make_derive("created", [] { return sstables_stats::shard_stats().created; },
             sm::description("Number of files opened with open_flags::create")),
+        sm::make_derive("removed", [] { return sstables_stats::shard_stats().removed; },
+            sm::description("Number of removed files/dirs")),
         sm::make_derive("opened_for_write", [] { return sstables_stats::shard_stats().opened_w; },
             sm::description("Number of files opened for write/read+write")),
         sm::make_derive("opened_for_read", [] { return sstables_stats::shard_stats().opened_r; },

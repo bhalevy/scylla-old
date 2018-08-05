@@ -173,4 +173,11 @@ inline open_checked_sstables_file_dma(const io_error_handler& error_handler,
     });
 }
 
+future<> remove_file(sstring pathname) {
+    return engine().remove_file(std::move(pathname)).then([] {
+        sstables_stats::submit_remove();
+        return make_ready_future<>();
+    });
+}
+
 }

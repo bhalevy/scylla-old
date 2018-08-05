@@ -26,6 +26,7 @@ namespace sstables {
 class sstables_stats {
     static thread_local struct stats {
         uint64_t created = 0; // Number of sstables opened with open_flags::create
+        uint64_t removed = 0; // Number of removed sstables files
         uint64_t opened_w = 0; // Number of sstables opened for write
         uint64_t opened_r = 0; // Number of sstables opened for read
         uint64_t closed_w = 0; // Number of sstables closed after being opened for write
@@ -88,6 +89,10 @@ public:
         submit_read_end();
         _shard_stats.reads++;
         _shard_stats.bytes_read += n;
+    };
+
+    static inline void submit_remove() {
+        _shard_stats.removed++;
     };
 };
 
