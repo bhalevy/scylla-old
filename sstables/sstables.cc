@@ -4238,6 +4238,7 @@ delete_atomically(std::vector<shared_sstable> ssts, const db::large_partition_ha
     return delete_sstables(std::move(sstables_to_delete_atomically));
 }
 
+thread_local sstables_stats::stats sstables_stats::_shard_stats;
 thread_local shared_index_lists::stats shared_index_lists::_shard_stats;
 static thread_local seastar::metrics::metric_groups metrics;
 
@@ -4251,6 +4252,19 @@ future<> init_metrics() {
             sm::description("Index page requests which initiated a read from disk")),
         sm::make_derive("index_page_blocks", [] { return shared_index_lists::shard_stats().blocks; },
             sm::description("Index page requests which needed to wait due to page not being loaded yet")),
+
+        sm::make_derive("created", [] { return sstables_stats::shard_stats().created; },
+            sm::description("Number of files opened with open_flags::create")),
+        sm::make_derive("opened_for_write", [] { return sstables_stats::shard_stats().opened_w; },
+            sm::description("Number of files opened for write/read+write")),
+        sm::make_derive("opened_for_read", [] { return sstables_stats::shard_stats().opened_r; },
+            sm::description("Number of files opened for read only")),
+        sm::make_counter("currently_opened_for_write", [] {
+                return sstables_stats::shard_stats().opened_w - sstables_stats::shard_stats().closed_w;
+            }, sm::description("Number of files currently opened for write/read+write")),
+        sm::make_counter("currently_opened_for_read", [] {
+                return sstables_stats::shard_stats().opened_r - sstables_stats::shard_stats().closed_r;
+            }, sm::description("Number of files currently opened for read only")),
     });
   });
 }

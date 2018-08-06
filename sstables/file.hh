@@ -24,6 +24,7 @@
 #include <core/file.hh>
 #include <core/reactor.hh>
 #include "checked-file-impl.hh"
+#include "stats.hh"
 
 namespace sstables {
 
@@ -83,11 +84,15 @@ public:
     }
 
     virtual future<> close() override {
-        return get_file_impl(_file)->close();
+        return get_file_impl(_file)->close().then([this] {
+            sstables_stats::submit_close(_oflags);
+        });
     }
 
     virtual std::unique_ptr<file_handle_impl> dup() override {
-        return get_file_impl(_file)->dup();
+        auto f = get_file_impl(_file)->dup();
+        sstables_stats::submit_open(_oflags);
+        return f;
     }
 
     virtual subscription<directory_entry> list_directory(std::function<future<> (directory_entry de)> next) override {
@@ -101,6 +106,7 @@ public:
 
 inline file make_sstables_file(file f, open_flags oflags)
 {
+    sstables_stats::submit_open(oflags);
     return file(::make_shared<sstables_file_impl>(f, oflags));
 }
 
