@@ -69,6 +69,7 @@
 #include "vint-serialization.hh"
 #include "db/large_partition_handler.hh"
 #include "sstables/random_access_reader.hh"
+#include "file.hh"
 
 thread_local disk_error_signal_type sstable_read_error;
 thread_local disk_error_signal_type sstable_write_error;
@@ -99,11 +100,11 @@ read_monitor_generator& default_read_monitor_generator() {
 static future<file> open_sstable_component_file(const io_error_handler& error_handler, sstring name, open_flags flags,
         file_open_options options) {
     if (flags != open_flags::ro && get_config().enable_sstable_data_integrity_check()) {
-        return open_integrity_checked_file_dma(name, flags, options).then([&error_handler] (auto f) {
-            return make_checked_file(error_handler, std::move(f));
+        return open_integrity_checked_file_dma(name, flags, options).then([&error_handler, flags] (auto f) {
+            return make_ready_future<file>(make_checked_sstables_file(error_handler, f, flags));
         });
     }
-    return open_checked_file_dma(error_handler, name, flags, options);
+    return open_checked_sstables_file_dma(error_handler, name, flags, options);
 }
 
 future<file> new_sstable_component_file(const io_error_handler& error_handler, sstring name, open_flags flags,
@@ -961,7 +962,7 @@ future<> sstable::read_toc() {
 
     sstlog.debug("Reading TOC file {} ", file_path);
 
-    return open_checked_file_dma(_read_error_handler, file_path, open_flags::ro).then([this, file_path] (file f) {
+    return open_checked_sstables_file_dma(_read_error_handler, file_path, open_flags::ro).then([this, file_path] (file f) {
         auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
         auto buf = bufptr.get();
 
@@ -1131,7 +1132,7 @@ future<> sstable::read_simple(T& component, const io_priority_class& pc) {
 
     auto file_path = filename(Type);
     sstlog.debug(("Reading " + sstable_version_constants::get_component_map(_version).at(Type) + " file {} ").c_str(), file_path);
-    return open_file_dma(file_path, open_flags::ro).then([this, &component] (file fi) {
+    return open_sstables_file_dma(file_path, open_flags::ro).then([this, &component] (file fi) {
         auto fut = fi.size();
         return fut.then([this, &component, fi = std::move(fi)] (uint64_t size) {
             auto f = make_checked_file(_read_error_handler, fi);
@@ -1480,8 +1481,8 @@ future<> sstable::load(const io_priority_class& pc) {
 future<> sstable::load(sstables::foreign_sstable_open_info info) {
     return read_toc().then([this, info = std::move(info)] () mutable {
         _components = std::move(info.components);
-        _data_file = make_checked_file(_read_error_handler, info.data.to_file());
-        _index_file = make_checked_file(_read_error_handler, info.index.to_file());
+        _data_file = make_checked_sstables_file(_read_error_handler, info.data.to_file(), open_flags::ro);
+        _index_file = make_checked_sstables_file(_read_error_handler, info.index.to_file(), open_flags::ro);
         _shards = std::move(info.owners);
         validate_min_max_metadata();
         validate_max_local_deletion_time();
@@ -3584,7 +3585,7 @@ future<> sstable::generate_summary(const io_priority_class& pc) {
         }
     };
 
-    return open_checked_file_dma(_read_error_handler, filename(component_type::Index), open_flags::ro).then([this, &pc] (file index_file) {
+    return open_checked_sstables_file_dma(_read_error_handler, filename(component_type::Index), open_flags::ro).then([this, &pc] (file index_file) {
         return do_with(std::move(index_file), [this, &pc] (file index_file) {
             return index_file.size().then([this, &pc, index_file] (auto index_size) {
                 // an upper bound. Surely to be less than this.
@@ -4027,7 +4028,7 @@ remove_by_toc_name(sstring sstable_toc_name, const io_error_handler& error_handl
             return;
         }
 
-        auto toc_file = open_checked_file_dma(error_handler, new_toc_name, open_flags::ro).get0();
+        auto toc_file = open_checked_sstables_file_dma(error_handler, new_toc_name, open_flags::ro).get0();
         auto in = make_file_input_stream(toc_file);
         auto size = toc_file.size().get0();
         auto text = in.read_exactly(size).get0();
