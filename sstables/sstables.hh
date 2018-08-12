@@ -60,6 +60,7 @@
 #include "sstable_version.hh"
 #include "db/large_partition_handler.hh"
 #include "column_translation.hh"
+#include "stats.hh"
 
 #include <seastar/util/optimized_optional.hh>
 
@@ -129,7 +130,8 @@ public:
     static const size_t default_buffer_size = default_sstable_buffer_size();
 public:
     sstable(schema_ptr schema, sstring dir, int64_t generation, version_types v, format_types f, gc_clock::time_point now = gc_clock::now(),
-            io_error_handler_gen error_handler_gen = default_io_error_handler_gen(), size_t buffer_size = default_buffer_size)
+            io_error_handler_gen error_handler_gen = default_io_error_handler_gen(), size_t buffer_size = default_buffer_size,
+            sstables_stats stats = {})
         : sstable_buffer_size(buffer_size)
         , _schema(std::move(schema))
         , _dir(std::move(dir))
@@ -139,6 +141,7 @@ public:
         , _now(now)
         , _read_error_handler(error_handler_gen(sstable_read_error))
         , _write_error_handler(error_handler_gen(sstable_write_error))
+        , _stats(std::move(stats))
     { }
     sstable& operator=(const sstable&) = delete;
     sstable(const sstable&) = delete;
@@ -474,6 +477,8 @@ private:
     io_error_handler _read_error_handler;
     io_error_handler _write_error_handler;
 
+    sstables_stats _stats;
+
     const bool has_component(component_type f) const;
 
     const sstring filename(component_type f) const;
@@ -726,6 +731,10 @@ public:
     // returns all info needed for a sstable to be shared with other shards.
     static future<sstable_open_info> load_shared_components(const schema_ptr& s, sstring dir, int generation, version_types v, format_types f,
         const io_priority_class& pc = default_priority_class());
+
+    sstables_stats& get_stats() {
+        return _stats;
+    }
 
     // Allow the test cases from sstable_test.cc to test private methods. We use
     // a placeholder to avoid cluttering this class too much. The sstable_test class
