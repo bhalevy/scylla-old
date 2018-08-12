@@ -30,6 +30,7 @@ class sstables_stats {
         uint64_t row_writes = 0;
         uint64_t range_tombstone_writes = 0;
         uint64_t partition_reads = 0;
+        uint64_t partition_seeks = 0;
     } _shard_stats;
 
 public:
@@ -53,6 +54,10 @@ public:
 
     static void on_partition_read() {
         ++_shard_stats.partition_reads;
+    }
+
+    static void on_partition_seek() {
+        ++_shard_stats.partition_seeks;
     }
 };
 
