@@ -37,6 +37,7 @@
 #include "../dht/i_partitioner.hh"
 #include "data_consume_context.hh"
 #include "mp_row_consumer.hh"
+#include "stats.hh"
 
 namespace sstables {
 
@@ -287,6 +288,8 @@ private:
             // FIXME: give more details from _context
             throw malformed_sstable_exception("consumer not at partition boundary", _sst->get_filename());
         }
+
+        sstables_stats::submit_partition_read();
 
         // It's better to obtain partition information from the index if we already have it.
         // We can save on IO if the user will skip past the front of partition immediately.
