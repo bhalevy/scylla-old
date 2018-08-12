@@ -236,6 +236,7 @@ private:
                 _read_enabled = false;
                 return make_ready_future<>();
             }
+            sstables_stats::submit_partition_seek();
             return _context->skip_to(_index_reader->element_kind(), start);
         });
     }
@@ -344,6 +345,7 @@ private:
             return get_index_reader().advance_to(*pos).then([this] {
                 index_reader& idx = *_index_reader;
                 auto index_position = idx.data_file_positions();
+                sstables_stats::submit_partition_seek();
                 return _context->skip_to(idx.element_kind(), index_position.start);
             });
         });
