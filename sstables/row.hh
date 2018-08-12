@@ -42,6 +42,7 @@
 
 #include "sstables.hh"
 #include "tombstone.hh"
+#include "stats.hh"
 
 // sstables::data_consume_row feeds the contents of a single row into a
 // row_consumer object:
@@ -310,6 +311,7 @@ public:
             if (_u16 == 0) {
                 // end of row marker
                 _state = state::ROW_START;
+                sstables_stats::submit_row_read();
                 if (_consumer.consume_row_end() ==
                         row_consumer::proceed::no) {
                     return row_consumer::proceed::no;
@@ -504,6 +506,7 @@ public:
         // filter and using a promoted index), we may be in ATOM_START or ATOM_START_2
         // state instead of ROW_START. In that case we did not read the
         // end-of-row marker and consume_row_end() was never called.
+        sstables_stats::submit_row_read();
         if (_state == state::ATOM_START || _state == state::ATOM_START_2) {
             _consumer.consume_row_end();
             return;
