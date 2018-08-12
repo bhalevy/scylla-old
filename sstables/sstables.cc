@@ -4275,6 +4275,8 @@ future<> init_metrics() {
             sm::description("Number of clustering rows written")),
         sm::make_derive("range_tombstone_writes", [] { return sstables_stats::shard_stats().range_tombstone_writes; },
             sm::description("Number of range tombstones written")),
+        sm::make_derive("partition_reads", [] { return sstables_stats::shard_stats().partition_reads; },
+            sm::description("Number of partitions read")),
     });
   });
 }
