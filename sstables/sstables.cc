@@ -69,6 +69,7 @@
 #include "vint-serialization.hh"
 #include "db/large_partition_handler.hh"
 #include "sstables/random_access_reader.hh"
+#include "stats.hh"
 
 thread_local disk_error_signal_type sstable_read_error;
 thread_local disk_error_signal_type sstable_write_error;
@@ -4237,6 +4238,7 @@ delete_atomically(std::vector<shared_sstable> ssts, const db::large_partition_ha
     return delete_sstables(std::move(sstables_to_delete_atomically));
 }
 
+thread_local sstables_stats::stats sstables_stats::_shard_stats;
 thread_local shared_index_lists::stats shared_index_lists::_shard_stats;
 static thread_local seastar::metrics::metric_groups metrics;
 
