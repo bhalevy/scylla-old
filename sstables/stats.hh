@@ -25,11 +25,35 @@ namespace sstables {
 
 class sstables_stats {
     static thread_local struct stats {
+        uint64_t partition_writes = 0;
+        uint64_t static_row_writes = 0;
+        uint64_t row_writes = 0;
+        uint64_t tombstone_writes = 0;
+        uint64_t range_tombstone_writes = 0;
     } _shard_stats;
 
 public:
     static const stats& shard_stats() { return _shard_stats; }
 
+    static inline void submit_partition_write() {
+        ++_shard_stats.partition_writes;
+    }
+
+    static inline void submit_static_row_write() {
+        ++_shard_stats.static_row_writes;
+    }
+
+    static inline void submit_row_write() {
+        ++_shard_stats.row_writes;
+    }
+
+    static inline void submit_tombstone_write() {
+        ++_shard_stats.tombstone_writes;
+    }
+
+    static inline void submit_range_tombstone_write() {
+        ++_shard_stats.range_tombstone_writes;
+    }
 };
 
 }
