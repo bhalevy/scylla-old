@@ -56,18 +56,14 @@ namespace statements {
 
 alter_table_statement::alter_table_statement(shared_ptr<cf_name> name,
                                              type t,
-                                             shared_ptr<column_identifier::raw> column_name,
-                                             shared_ptr<cql3_type::raw> validator,
+                                             std::vector<column_change> column_changes,
                                              shared_ptr<cf_prop_defs> properties,
-                                             renames_type renames,
-                                             bool is_static)
+                                             renames_type renames)
     : schema_altering_statement(std::move(name))
     , _type(t)
-    , _raw_column_name(std::move(column_name))
-    , _validator(std::move(validator))
+    , _column_changes(std::move(column_changes))
     , _properties(std::move(properties))
     , _renames(std::move(renames))
-    , _is_static(is_static)
 {
 }
 
@@ -281,16 +277,6 @@ future<shared_ptr<cql_transport::event::schema_change>> alter_table_statement::a
 
     auto cfm = schema_builder(schema);
 
-    shared_ptr<cql3_type> validator;
-    if (_validator) {
-        validator = _validator->prepare(db, keyspace());
-    }
-    shared_ptr<column_identifier> column_name;
-    const column_definition* def = nullptr;
-    if (_raw_column_name) {
-        column_name = _raw_column_name->prepare_column_identifier(schema);
-        def = get_column_definition(schema, *column_name);
-    }
     if (_properties->get_id()) {
         throw exceptions::configuration_exception("Cannot alter table id.");
     }
@@ -298,22 +284,33 @@ future<shared_ptr<cql_transport::event::schema_change>> alter_table_statement::a
     auto& cf = db.find_column_family(schema);
     std::vector<view_ptr> view_updates;
 
+    using column_change_fn = std::function<void (alter_table_statement* this_ats, const schema_ptr schema, const table& cf, schema_builder& cfm, std::vector<view_ptr>& view_updates, const shared_ptr<column_identifier> column_name, const shared_ptr<cql3_type> validator, const column_definition* def, bool is_static)>;
+
+    auto invoke_column_change_fn = [&] (column_change_fn fn) {
+         for (auto& [raw_name, raw_validator, is_static] : _column_changes) {
+             auto column_name = raw_name->prepare_column_identifier(schema);
+             auto validator = raw_validator ? raw_validator->prepare(db, keyspace()) : nullptr;
+             auto* def = get_column_definition(schema, *column_name);
+             fn(this, schema, cf, cfm, view_updates, column_name, validator, def, is_static);
+         }
+    };
+
     switch (_type) {
     case alter_table_statement::type::add:
-        assert(column_name);
+        assert(_column_changes.size());
         if (schema->is_dense()) {
             throw exceptions::invalid_request_exception("Cannot add new column to a COMPACT STORAGE table");
         }
-        add_column(schema, cf, cfm, view_updates, column_name, validator, def, _is_static);
+        invoke_column_change_fn(std::mem_fn(&alter_table_statement::add_column));
         break;
 
     case alter_table_statement::type::alter:
-        assert(column_name);
-        alter_column(schema, cf, cfm, view_updates, column_name, validator, def, _is_static);
+        assert(_column_changes.size() == 1);
+        invoke_column_change_fn(std::mem_fn(&alter_table_statement::alter_column));
         break;
 
     case alter_table_statement::type::drop:
-        assert(column_name);
+        assert(_column_changes.size());
         if (!schema->is_cql3_table()) {
             throw exceptions::invalid_request_exception("Cannot drop columns from a non-CQL3 table");
         }
@@ -322,22 +319,7 @@ future<shared_ptr<cql_transport::event::schema_change>> alter_table_statement::a
                     "Cannot drop columns from base table %s.%s with materialized views",
                     keyspace(), column_family()));
         }
-
-        if (!def) {
-            throw exceptions::invalid_request_exception(sprint("Column %s was not found in table %s", column_name, column_family()));
-        }
-
-        if (def->is_primary_key()) {
-            throw exceptions::invalid_request_exception(sprint("Cannot drop PRIMARY KEY part %s", column_name));
-        } else {
-            for (auto&& column_def : boost::range::join(schema->static_columns(), schema->regular_columns())) { // find
-                if (column_def.name() == column_name->name()) {
-                    cfm.without_column(column_name->name());
-                    break;
-                }
-            }
-        }
-        drop_column(schema, cf, cfm, view_updates, column_name, validator, def, _is_static);
+        invoke_column_change_fn(std::mem_fn(&alter_table_statement::drop_column));
         break;
 
     case alter_table_statement::type::opts:
