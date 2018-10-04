@@ -62,8 +62,8 @@ public:
                                                shared_ptr<column_identifier::raw>>>;
 private:
     const type _type;
-    shared_ptr<column_identifier::raw> _raw_column_name = nullptr;
-    shared_ptr<cql3_type::raw> _validator = nullptr;
+    std::vector<::shared_ptr<column_identifier::raw>> _raw_column_names;
+    std::vector<::shared_ptr<cql3_type::raw>> _raw_column_validators;
     shared_ptr<cf_prop_defs> _properties;
     renames_type _renames;
     bool _is_static = false;

@@ -904,10 +904,10 @@ alterTableStatement returns [shared_ptr<alter_table_statement> expr]
           ( K_ALTER  { $expr = ::make_shared<alter_table_statement>(std::move(cf), alter_table_statement::type::alter); }
             id=cident K_TYPE v=comparatorType { $expr->add_column(id, v); }
           | K_ADD    { $expr = ::make_shared<alter_table_statement>(std::move(cf), alter_table_statement::type::add); }
-            id=cident v=comparatorType { $expr->add_column(id, v); }
+            alterTableAddColumns[expr]
             (K_STATIC { $expr->set_static(); })?
           | K_DROP   { $expr = ::make_shared<alter_table_statement>(std::move(cf), alter_table_statement::type::drop); }
-            id=cident { $expr->add_column(id); }
+            alterTableDropColumns[expr]
           | K_WITH   { $expr = ::make_shared<alter_table_statement>(std::move(cf), alter_table_statement::type::opts); }
             properties[$expr->get_properties()]
           | K_RENAME { $expr = ::make_shared<alter_table_statement>(std::move(cf), alter_table_statement::type::rename); }
@@ -916,6 +916,32 @@ alterTableStatement returns [shared_ptr<alter_table_statement> expr]
           )
     {
     }
+    ;
+
+alterTableAddColumns[shared_ptr<alter_table_statement> expr]
+    : alterTableAddColumnsList[expr]
+    | '(' alterTableAddColumnsList[expr] ')'
+    ;
+
+alterTableAddColumnsList[shared_ptr<alter_table_statement> expr]
+    : alterTableAddColumnTuple[expr] ( ',' alterTableAddColumnTuple[expr] )*
+    ;
+
+alterTableAddColumnTuple[shared_ptr<alter_table_statement> expr]
+    : id=cident v=comparatorType { $expr->add_column(id, v); }
+    ;
+
+alterTableDropColumns[shared_ptr<alter_table_statement> expr]
+    : alterTableDropColumnsList[expr]
+    | '(' alterTableDropColumnsList[expr] ')'
+    ;
+
+alterTableDropColumnsList[shared_ptr<alter_table_statement> expr]
+    : alterTableColumnName[expr] ( ',' alterTableColumnName[expr] )*
+    ;
+
+alterTableColumnName[shared_ptr<alter_table_statement> expr]
+    : id=cident { $expr->add_column(id); }
     ;
 
 /**
