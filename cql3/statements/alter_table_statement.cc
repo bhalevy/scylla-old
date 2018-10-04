@@ -209,86 +209,94 @@ future<shared_ptr<cql_transport::event::schema_change>> alter_table_statement::a
             }
         }
 
-        if (def) {
-            if (def->is_partition_key()) {
-                throw exceptions::invalid_request_exception(sprint("Invalid column name %s because it conflicts with a PRIMARY KEY part", column_name));
-            } else {
-                throw exceptions::invalid_request_exception(sprint("Invalid column name %s because it conflicts with an existing column", column_name));
-            }
-        }
-
-        // Cannot re-add a dropped counter column. See #7831.
-        if (schema->is_counter() && schema->dropped_columns().count(column_name->text())) {
-            throw exceptions::invalid_request_exception(sprint("Cannot re-add previously dropped counter column %s", column_name));
-        }
-
-        auto type = validator->get_type();
-        if (type->is_collection() && type->is_multi_cell()) {
-            if (!schema->is_compound()) {
-                throw exceptions::invalid_request_exception("Cannot use non-frozen collections with a non-composite PRIMARY KEY");
-            }
-            if (schema->is_super()) {
-                throw exceptions::invalid_request_exception("Cannot use non-frozen collections with super column families");
-            }
-
-
-            // If there used to be a non-frozen collection column with the same name (that has been dropped),
-            // we could still have some data using the old type, and so we can't allow adding a collection
-            // with the same name unless the types are compatible (see #6276).
-            auto& dropped = schema->dropped_columns();
-            auto i = dropped.find(column_name->text());
-            if (i != dropped.end() && i->second.type->is_collection() && i->second.type->is_multi_cell()
-                    && !type->is_compatible_with(*i->second.type)) {
-                throw exceptions::invalid_request_exception(sprint("Cannot add a collection with the name %s "
-                    "because a collection with the same name and a different type has already been used in the past", column_name));
-            }
-        }
-
-        cfm.with_column(column_name->name(), type, _is_static ? column_kind::static_column : column_kind::regular_column);
-
-        // Adding a column to a base table always requires updating the view
-        // schemas: If the view includes all columns it should include the new
-        // column, but if it doesn't, it may need to include the new
-        // unselected column as a virtual column. The case when it we
-        // shouldn't add a virtual column is when the view has in its PK one
-        // of the base's regular columns - but even in this case we need to
-        // rebuild the view schema, to update the column ID.
-        if (!_is_static) {
-            for (auto&& view : cf.views()) {
-                schema_builder builder(view);
-                if (view->view_info()->include_all_columns()) {
-                    builder.with_column(column_name->name(), type);
-                } else if (!view->view_info()->base_non_pk_column_in_view_pk()) {
-                    db::view::create_virtual_column(builder, column_name->name(), type);
+        auto add_column = [this, schema, &cfm, &cf, validator, column_name, def, &view_updates] () {
+            if (def) {
+                if (def->is_partition_key()) {
+                    throw exceptions::invalid_request_exception(sprint("Invalid column name %s because it conflicts with a PRIMARY KEY part", column_name));
+                } else {
+                    throw exceptions::invalid_request_exception(sprint("Invalid column name %s because it conflicts with an existing column", column_name));
                 }
-                view_updates.push_back(view_ptr(builder.build()));
             }
-        }
 
+            // Cannot re-add a dropped counter column. See #7831.
+            if (schema->is_counter() && schema->dropped_columns().count(column_name->text())) {
+                throw exceptions::invalid_request_exception(sprint("Cannot re-add previously dropped counter column %s", column_name));
+            }
+
+            auto type = validator->get_type();
+            if (type->is_collection() && type->is_multi_cell()) {
+                if (!schema->is_compound()) {
+                    throw exceptions::invalid_request_exception("Cannot use non-frozen collections with a non-composite PRIMARY KEY");
+                }
+                if (schema->is_super()) {
+                    throw exceptions::invalid_request_exception("Cannot use non-frozen collections with super column families");
+                }
+
+
+                // If there used to be a non-frozen collection column with the same name (that has been dropped),
+                // we could still have some data using the old type, and so we can't allow adding a collection
+                // with the same name unless the types are compatible (see #6276).
+                auto& dropped = schema->dropped_columns();
+                auto i = dropped.find(column_name->text());
+                if (i != dropped.end() && i->second.type->is_collection() && i->second.type->is_multi_cell()
+                        && !type->is_compatible_with(*i->second.type)) {
+                    throw exceptions::invalid_request_exception(sprint("Cannot add a collection with the name %s "
+                        "because a collection with the same name and a different type has already been used in the past", column_name));
+                }
+            }
+
+            cfm.with_column(column_name->name(), type, _is_static ? column_kind::static_column : column_kind::regular_column);
+
+            // Adding a column to a base table always requires updating the view
+            // schemas: If the view includes all columns it should include the new
+            // column, but if it doesn't, it may need to include the new
+            // unselected column as a virtual column. The case when it we
+            // shouldn't add a virtual column is when the view has in its PK one
+            // of the base's regular columns - but even in this case we need to
+            // rebuild the view schema, to update the column ID.
+            if (!_is_static) {
+                for (auto&& view : cf.views()) {
+                    schema_builder builder(view);
+                    if (view->view_info()->include_all_columns()) {
+                        builder.with_column(column_name->name(), type);
+                    } else if (!view->view_info()->base_non_pk_column_in_view_pk()) {
+                        db::view::create_virtual_column(builder, column_name->name(), type);
+                    }
+                    view_updates.push_back(view_ptr(builder.build()));
+                }
+            }
+        };
+
+        add_column();
         break;
     }
     case alter_table_statement::type::alter:
     {
         assert(column_name);
-        if (!def) {
-            throw exceptions::invalid_request_exception(sprint("Column %s was not found in table %s", column_name, column_family()));
-        }
 
-        auto type = validate_alter(schema, *def, *validator);
-        // In any case, we update the column definition
-        cfm.with_altered_column_type(column_name->name(), type);
-
-        // We also have to validate the view types here. If we have a view which includes a column as part of
-        // the clustering key, we need to make sure that it is indeed compatible.
-        for (auto&& view : cf.views()) {
-            auto* view_def = view->get_column_definition(column_name->name());
-            if (view_def) {
-                schema_builder builder(view);
-                auto view_type = validate_alter(view, *view_def, *validator);
-                builder.with_altered_column_type(column_name->name(), std::move(view_type));
-                view_updates.push_back(view_ptr(builder.build()));
+        auto alter_column = [this, schema, &cfm, &cf, validator, column_name, def, &view_updates] () {
+            if (!def) {
+                throw exceptions::invalid_request_exception(sprint("Column %s was not found in table %s", column_name, column_family()));
             }
-        }
+
+            auto type = validate_alter(schema, *def, *validator);
+            // In any case, we update the column definition
+            cfm.with_altered_column_type(column_name->name(), type);
+
+            // We also have to validate the view types here. If we have a view which includes a column as part of
+            // the clustering key, we need to make sure that it is indeed compatible.
+            for (auto&& view : cf.views()) {
+                auto* view_def = view->get_column_definition(column_name->name());
+                if (view_def) {
+                    schema_builder builder(view);
+                    auto view_type = validate_alter(view, *view_def, *validator);
+                    builder.with_altered_column_type(column_name->name(), std::move(view_type));
+                    view_updates.push_back(view_ptr(builder.build()));
+                }
+            }
+        };
+
+        alter_column();
         break;
     }
     case alter_table_statement::type::drop:
@@ -297,26 +305,30 @@ future<shared_ptr<cql_transport::event::schema_change>> alter_table_statement::a
         if (!schema->is_cql3_table()) {
             throw exceptions::invalid_request_exception("Cannot drop columns from a non-CQL3 table");
         }
-        if (!def) {
-            throw exceptions::invalid_request_exception(sprint("Column %s was not found in table %s", column_name, column_family()));
-        }
-
-        if (def->is_primary_key()) {
-            throw exceptions::invalid_request_exception(sprint("Cannot drop PRIMARY KEY part %s", column_name));
-        } else {
-            for (auto&& column_def : boost::range::join(schema->static_columns(), schema->regular_columns())) { // find
-                if (column_def.name() == column_name->name()) {
-                    cfm.without_column(column_name->name());
-                    break;
-                }
-            }
-        }
-
         if (!cf.views().empty()) {
             throw exceptions::invalid_request_exception(sprint(
-                    "Cannot drop column %s on base table %s.%s with materialized views",
-                    column_name, keyspace(), column_family()));
+                    "Cannot drop columns from base table %s.%s with materialized views",
+                    keyspace(), column_family()));
         }
+
+        auto drop_column = [this, schema, &cfm, &cf, column_name, def] () {
+            if (!def) {
+                throw exceptions::invalid_request_exception(sprint("Column %s was not found in table %s", column_name, column_family()));
+            }
+
+            if (def->is_primary_key()) {
+                throw exceptions::invalid_request_exception(sprint("Cannot drop PRIMARY KEY part %s", column_name));
+            } else {
+                for (auto&& column_def : boost::range::join(schema->static_columns(), schema->regular_columns())) { // find
+                    if (column_def.name() == column_name->name()) {
+                        cfm.without_column(column_name->name());
+                        break;
+                    }
+                }
+            }
+        };
+
+        drop_column();
         break;
     }
 
