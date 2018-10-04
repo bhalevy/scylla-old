@@ -189,6 +189,38 @@ SEASTAR_TEST_CASE(test_column_is_dropped) {
     });
 }
 
+SEASTAR_TEST_CASE(test_multiple_columns_add_and_drop) {
+    return do_with_cql_env([](cql_test_env& e) {
+        return seastar::async([&] {
+            e.execute_cql("create keyspace tests with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };").get();
+            e.execute_cql("create table tests.table1 (pk int primary key, c1 int, c2 int, c3 int);").get();
+            e.execute_cql("alter table tests.table1 drop c1, c3;").get();
+            e.execute_cql("alter table tests.table1 add s1 int, s2 int;").get();
+
+            schema_ptr s = e.db().local().find_schema("tests", "table1");
+            BOOST_REQUIRE(s->columns_by_name().count(to_bytes("c2")));
+            BOOST_REQUIRE(!s->columns_by_name().count(to_bytes("c1")));
+            BOOST_REQUIRE(!s->columns_by_name().count(to_bytes("c3")));
+            BOOST_REQUIRE(s->columns_by_name().count(to_bytes("s1")));
+            BOOST_REQUIRE(s->columns_by_name().count(to_bytes("s2")));
+
+            e.execute_cql("alter table tests.table1 drop (c2);").get();
+            e.execute_cql("alter table tests.table1 add (s3 int);").get();
+            s = e.db().local().find_schema("tests", "table1");
+            BOOST_REQUIRE(!s->columns_by_name().count(to_bytes("c2")));
+            BOOST_REQUIRE(s->columns_by_name().count(to_bytes("s3")));
+
+            e.execute_cql("alter table tests.table1 drop (s1, s2);").get();
+            e.execute_cql("alter table tests.table1 add (s4 int, s5 int);").get();
+            s = e.db().local().find_schema("tests", "table1");
+            BOOST_REQUIRE(!s->columns_by_name().count(to_bytes("s1")));
+            BOOST_REQUIRE(!s->columns_by_name().count(to_bytes("s2")));
+            BOOST_REQUIRE(s->columns_by_name().count(to_bytes("s4")));
+            BOOST_REQUIRE(s->columns_by_name().count(to_bytes("s5")));
+        });
+    });
+}
+
 SEASTAR_TEST_CASE(test_combined_column_add_and_drop) {
     return do_with_cql_env([](cql_test_env& e) {
         return seastar::async([&] {
