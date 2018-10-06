@@ -62,19 +62,18 @@ public:
                                                shared_ptr<column_identifier::raw>>>;
 private:
     const type _type;
-    const shared_ptr<column_identifier::raw> _raw_column_name;
-    const shared_ptr<cql3_type::raw> _validator;
-    const shared_ptr<cf_prop_defs> _properties;
-    const renames_type _renames;
-    const bool _is_static;
+    shared_ptr<column_identifier::raw> _raw_column_name = nullptr;
+    shared_ptr<cql3_type::raw> _validator = nullptr;
+    shared_ptr<cf_prop_defs> _properties;
+    renames_type _renames;
+    bool _is_static = false;
 public:
-    alter_table_statement(shared_ptr<cf_name> name,
-                          type t,
-                          shared_ptr<column_identifier::raw> column_name,
-                          shared_ptr<cql3_type::raw> validator,
-                          shared_ptr<cf_prop_defs> properties,
-                          renames_type renames,
-                          bool is_static);
+    alter_table_statement(shared_ptr<cf_name> name, type t);
+
+    void set_static();
+    void add_column(shared_ptr<column_identifier::raw> name, shared_ptr<cql3_type::raw> validator = nullptr);
+    void add_rename(shared_ptr<column_identifier::raw> from, shared_ptr<column_identifier::raw> to);
+    shared_ptr<cf_prop_defs> get_properties();
 
     virtual future<> check_access(const service::client_state& state) override;
     virtual void validate(service::storage_proxy& proxy, const service::client_state& state) override;

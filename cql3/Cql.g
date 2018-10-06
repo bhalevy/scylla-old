@@ -900,24 +900,21 @@ alterKeyspaceStatement returns [shared_ptr<cql3::statements::alter_keyspace_stat
  * ALTER COLUMN FAMILY <CF> RENAME <column> TO <column>;
  */
 alterTableStatement returns [shared_ptr<alter_table_statement> expr]
-    @init {
-        alter_table_statement::type type;
-        auto props = make_shared<cql3::statements::cf_prop_defs>();
-        std::vector<std::pair<shared_ptr<cql3::column_identifier::raw>, shared_ptr<cql3::column_identifier::raw>>> renames;
-        bool is_static = false;
-    }
     : K_ALTER K_COLUMNFAMILY cf=columnFamilyName
-          ( K_ALTER id=cident K_TYPE v=comparatorType { type = alter_table_statement::type::alter; }
-          | K_ADD   id=cident v=comparatorType ({ is_static=true; } K_STATIC)? { type = alter_table_statement::type::add; }
-          | K_DROP  id=cident                         { type = alter_table_statement::type::drop; }
-          | K_WITH  properties[props]                 { type = alter_table_statement::type::opts; }
-          | K_RENAME                                  { type = alter_table_statement::type::rename; }
-               id1=cident K_TO toId1=cident { renames.emplace_back(id1, toId1); }
-               ( K_AND idn=cident K_TO toIdn=cident { renames.emplace_back(idn, toIdn); } )*
+          ( K_ALTER  { $expr = ::make_shared<alter_table_statement>(std::move(cf), alter_table_statement::type::alter); }
+            id=cident K_TYPE v=comparatorType { $expr->add_column(id, v); }
+          | K_ADD    { $expr = ::make_shared<alter_table_statement>(std::move(cf), alter_table_statement::type::add); }
+            id=cident v=comparatorType { $expr->add_column(id, v); }
+            (K_STATIC { $expr->set_static(); })?
+          | K_DROP   { $expr = ::make_shared<alter_table_statement>(std::move(cf), alter_table_statement::type::drop); }
+            id=cident { $expr->add_column(id); }
+          | K_WITH   { $expr = ::make_shared<alter_table_statement>(std::move(cf), alter_table_statement::type::opts); }
+            properties[$expr->get_properties()]
+          | K_RENAME { $expr = ::make_shared<alter_table_statement>(std::move(cf), alter_table_statement::type::rename); }
+               id1=cident K_TO toId1=cident { $expr->add_rename(id1, toId1); }
+               ( K_AND idn=cident K_TO toIdn=cident { $expr->add_rename(idn, toIdn); } )*
           )
     {
-        $expr = ::make_shared<alter_table_statement>(std::move(cf), type, std::move(id),
-            std::move(v), std::move(props), std::move(renames), is_static);
     }
     ;
 

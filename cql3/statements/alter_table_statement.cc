@@ -54,21 +54,28 @@ namespace cql3 {
 
 namespace statements {
 
-alter_table_statement::alter_table_statement(shared_ptr<cf_name> name,
-                                             type t,
-                                             shared_ptr<column_identifier::raw> column_name,
-                                             shared_ptr<cql3_type::raw> validator,
-                                             shared_ptr<cf_prop_defs> properties,
-                                             renames_type renames,
-                                             bool is_static)
+alter_table_statement::alter_table_statement(shared_ptr<cf_name> name, type t)
     : schema_altering_statement(std::move(name))
     , _type(t)
-    , _raw_column_name(std::move(column_name))
-    , _validator(std::move(validator))
-    , _properties(std::move(properties))
-    , _renames(std::move(renames))
-    , _is_static(is_static)
+    , _properties(make_shared<cql3::statements::cf_prop_defs>())
 {
+}
+
+void alter_table_statement::set_static() {
+    _is_static = true;
+}
+
+void alter_table_statement::add_column(shared_ptr<column_identifier::raw> name, shared_ptr<cql3_type::raw> validator) {
+    _raw_column_name = std::move(name);
+    _validator = std::move(validator);
+}
+
+void alter_table_statement::add_rename(shared_ptr<column_identifier::raw> from, shared_ptr<column_identifier::raw> to) {
+    _renames.emplace_back(std::move(from), std::move(to));
+}
+
+shared_ptr<cf_prop_defs> alter_table_statement::get_properties() {
+    return _properties;
 }
 
 future<> alter_table_statement::check_access(const service::client_state& state) {
