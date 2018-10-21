@@ -417,8 +417,8 @@ private:
     column_stats _c_stats;
     file _index_file;
     file _data_file;
-    uint64_t _data_file_size;
-    uint64_t _index_file_size;
+    uint64_t _data_file_size = 0;
+    uint64_t _index_file_size = 0;
     uint64_t _filter_file_size = 0;
     uint64_t _bytes_on_disk = 0;
     db_clock::time_point _data_file_write_time;
@@ -432,7 +432,7 @@ private:
 
     //FIXME: Set by sstable_writer to influence sstable writing behavior.
     //       Remove when doing #3012
-    bool _correctly_serialize_non_compound_range_tombstones;
+    bool _correctly_serialize_non_compound_range_tombstones = false;
 
     // _pi_write is used temporarily for building the promoted
     // index (column sample) of one partition when writing a new sstable.
