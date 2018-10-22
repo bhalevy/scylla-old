@@ -1045,6 +1045,7 @@ void sstable::generate_toc(compressor_ptr c, double filter_fp_chance) {
 }
 
 void sstable::write_toc(const io_priority_class& pc) {
+    touch_dir().get0();
     auto file_path = filename(component_type::TemporaryTOC);
 
     sstlog.debug("Writing TOC file {} ", file_path);
@@ -3743,6 +3744,20 @@ future<> sstable::lookup_dir() {
     });
 }
 
+future<> sstable::touch_dir() {
+    if (_sst_dir) {
+        return make_ready_future<>();
+    }
+    return do_with(sst_dir(_dir, _generation), [this] (auto& alt_dir) {
+        sstlog.debug("Touching sst_dir={}", alt_dir);
+        return sstable_write_io_check(touch_directory, alt_dir).then([this, &alt_dir] {
+            return sstable_write_io_check(sync_directory, _dir).then([this, &alt_dir] {
+                _sst_dir = std::move(alt_dir);
+            });
+        });
+    });
+}
+
 std::vector<sstring> sstable::component_filenames() const {
     std::vector<sstring> res;
     for (auto c : sstable_version_constants::get_component_map(_version) | boost::adaptors::map_keys) {
@@ -3783,6 +3798,24 @@ const sstring sstable::filename(sstring dir, sstring ks, sstring cf, version_typ
     };
 
     return dir + "/" + seastar::format(fmtmap[version], ks, cf, _version_string.at(version), to_sstring(generation), _format_string.at(format), component);
+}
+
+const sstring sstable::lookup_filename(sstring dir, sstring ks, sstring cf, version_types version, int64_t generation, format_types format, component_type component) {
+    sstring& file_path = dir;
+    auto alt_dir = sst_dir(dir, generation);
+    if (file_exists(alt_dir).get0()) {
+        file_path = alt_dir;
+    }
+    return filename(file_path, ks, cf, version, generation, format, component);
+}
+
+const sstring sstable::lookup_filename(sstring dir, sstring ks, sstring cf, version_types version, int64_t generation, format_types format, sstring component) {
+    sstring& file_path = dir;
+    auto alt_dir = sst_dir(dir, generation);
+    if (file_exists(alt_dir).get0()) {
+        file_path = alt_dir;
+    }
+    return filename(file_path, ks, cf, version, generation, format, component);
 }
 
 std::vector<std::pair<component_type, sstring>> sstable::all_components() const {
@@ -3829,6 +3862,7 @@ future<> sstable::create_links(sstring dir, int64_t generation) {
 }
 
 future<> sstable::set_generation(int64_t new_generation) {
+    // FIXME: touch sst_dir for new generation
     return create_links(_dir, new_generation).then([this] {
         return remove_file(filename(component_type::TOC)).then([this] {
             return sstable_write_io_check(sync_directory, _dir);
@@ -3842,6 +3876,7 @@ future<> sstable::set_generation(int64_t new_generation) {
         });
     }).then([this, new_generation] {
         return sync_directory(_dir).then([this, new_generation] {
+            // FIXME: remove current sst_dir
             _generation = new_generation;
         });
     });
@@ -4159,6 +4194,7 @@ sstable::remove_by_toc_name(sstring sstable_toc_name, const io_error_handler& er
         }).get();
         fsync_directory(error_handler, dir).get();
         sstable_io_check(error_handler, remove_file, new_toc_name).get();
+        // FIXME: remove <generation>.sstable dir
     });
 }
 
@@ -4202,6 +4238,7 @@ sstable::remove_sstable_with_temp_toc(sstring ks, sstring cf, sstring dir, int64
         sstable_io_check(error_handler, remove_file, filename(dir, ks, cf, v, generation, f, component_type::TemporaryTOC)).get();
         // Fsync'ing column family dir to guarantee that deletion completed.
         fsync_directory(error_handler, dir).get();
+        // FIXME: remove <generation>.sstable dir
     });
 }
 

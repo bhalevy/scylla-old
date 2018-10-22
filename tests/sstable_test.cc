@@ -239,21 +239,40 @@ static future<std::pair<bufptr_t, size_t>> read_file(sstring file_path)
 struct sstdesc {
     sstring dir;
     int64_t gen;
+
+    future<sstring> get_dir() const {
+        auto dir1 = sstable::sst_dir(dir, gen);
+        return file_exists(dir1).then([this, dir1 = std::move(dir1)] (bool exists) {
+            if (exists) {
+                return make_ready_future<sstring>(std::move(dir1));
+            } else {
+                return make_ready_future<sstring>(dir);
+            }
+        });
+    }
+
+    future<sstring> file_path(sstring ks, sstring cf, sstable::version_types version, sstable::format_types format, component_type component) const {
+        return get_dir().then([=] (auto file_dir) {
+            return make_ready_future<sstring>(sstable::filename(file_dir, ks, cf, version, gen, format, component));
+        });
+    }
 };
 
 static future<> compare_files(sstdesc file1, sstdesc file2, component_type component) {
-    auto file_path = sstable::filename(file1.dir, "ks", "cf", la, file1.gen, big, component);
-    return read_file(file_path).then([component, file2] (auto ret) {
-        auto file_path = sstable::filename(file2.dir, "ks", "cf", la, file2.gen, big, component);
-        return read_file(file_path).then([ret = std::move(ret)] (auto ret2) {
-            // assert that both files have the same size.
-            BOOST_REQUIRE(ret.second == ret2.second);
-            // assert that both files have the same content.
-            BOOST_REQUIRE(::memcmp(ret.first.get(), ret2.first.get(), ret.second) == 0);
-            // free buf from both files.
+    return do_with(file1, file2, [component] (auto& file1, auto& file2) {
+        return file1.file_path("ks", "cf", la, big, component).then([component, &file2] (auto file1_path) {
+            return read_file(file1_path).then([component, &file2] (auto ret) {
+                return file2.file_path("ks", "cf", la, big, component).then([ret = std::move(ret)] (auto file2_path) mutable {
+                    return read_file(file2_path).then([ret = std::move(ret)] (auto ret2) {
+                        // assert that both files have the same size.
+                        BOOST_REQUIRE(ret.second == ret2.second);
+                        // assert that both files have the same content.
+                        BOOST_REQUIRE(::memcmp(ret.first.get(), ret2.first.get(), ret.second) == 0);
+                    });
+                });
+            });
         });
     });
-
 }
 
 static future<> check_component_integrity(component_type component) {

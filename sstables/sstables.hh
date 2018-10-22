@@ -181,6 +181,8 @@ public:
                                   format_types format, component_type component);
     static const sstring filename(sstring dir, sstring ks, sstring cf, version_types version, int64_t generation,
                                   format_types format, sstring component);
+    static const sstring lookup_filename(sstring dir, sstring ks, sstring cf, version_types version, int64_t generation, format_types format, component_type component);
+    static const sstring lookup_filename(sstring dir, sstring ks, sstring cf, version_types version, int64_t generation, format_types format, sstring component);
     static future<> remove_by_toc_name(sstring sstable_toc_name, const io_error_handler& error_handler = sstable_write_error_handler);
     // WARNING: it should only be called to remove components of a sstable with
     // a temporary TOC file.
@@ -371,6 +373,12 @@ public:
     const sstring toc_filename() const {
         return filename(component_type::TOC);
     }
+    static const sstring sst_dir_basename(unsigned long gen) {
+        return fmt::format("{:016d}.sstable", gen);
+    }
+    static const sstring sst_dir(const sstring dir, unsigned long gen) {
+        return dir + "/" + sst_dir_basename(gen);
+    }
     const sstring& get_dir() const {
         return _dir;
     }
@@ -490,15 +498,8 @@ private:
 
     sstables_stats _stats;
 
-    static const sstring sst_dir_basename(unsigned long gen) {
-        return fmt::format("{:016d}.sstable", gen);
-    }
-
-    static const sstring sst_dir(const sstring dir, unsigned long gen) {
-        return dir + "/" + sst_dir_basename(gen);
-    }
-
     future<> lookup_dir();
+    future<> touch_dir();
 
     const bool has_component(component_type f) const;
 
