@@ -970,9 +970,9 @@ future<> sstable::read_toc() {
         return make_ready_future<>();
     }
 
-    auto file_path = filename(component_type::TOC);
-
-    sstlog.debug("Reading TOC file {} ", file_path);
+    return lookup_dir().then([this] {
+        auto file_path = filename(component_type::TOC);
+        sstlog.debug("Reading TOC file {} ", file_path);
 
     return open_checked_file_dma(_read_error_handler, file_path, open_flags::ro).then([this, file_path] (file f) {
         auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
@@ -1019,7 +1019,7 @@ future<> sstable::read_toc() {
             throw;
         }
     });
-
+    });
 }
 
 void sstable::generate_toc(compressor_ptr c, double filter_fp_chance) {
@@ -3674,6 +3674,25 @@ uint64_t sstable::bytes_on_disk() {
 
 const bool sstable::has_component(component_type f) const {
     return _recognized_components.count(f);
+}
+
+const sstring sstable::sst_dir() const {
+    return _sst_dir_lookedup ? _dir : sst_dir(_dir, _generation);
+}
+
+future<> sstable::lookup_dir() {
+    if (_sst_dir_lookedup) {
+        return make_ready_future<>();
+    }
+    return do_with(sst_dir(), [this] (auto& alt_dir) {
+        return file_exists(alt_dir).then([this, &alt_dir] (bool exists) {
+            if (exists) {
+                _dir = std::move(alt_dir);
+            }
+            _sst_dir_lookedup = true;
+            sstlog.debug("sst_dir={} {}found", alt_dir, exists ? "" : "not ");
+        });
+    });
 }
 
 const sstring sstable::filename(component_type f) const {

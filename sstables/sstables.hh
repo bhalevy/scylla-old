@@ -462,6 +462,7 @@ private:
 
     schema_ptr _schema;
     sstring _dir;
+    bool _sst_dir_lookedup = false;
     unsigned long _generation = 0;
     version_types _version;
     format_types _format;
@@ -476,6 +477,17 @@ private:
     io_error_handler _write_error_handler;
 
     sstables_stats _stats;
+
+    static const sstring sst_dir_basename(unsigned long gen) {
+        return to_sstring(gen) + ".sstable";
+    }
+
+    static const sstring sst_dir(const sstring dir, unsigned long gen) {
+        return dir + "/" + sst_dir_basename(gen);
+    }
+
+    const sstring sst_dir() const;
+    future<> lookup_dir();
 
     const bool has_component(component_type f) const;
 
