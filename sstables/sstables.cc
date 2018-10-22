@@ -113,17 +113,21 @@ static future<file> open_sstable_component_file_non_checked(sstring name, open_f
     return open_file_dma(name, flags, options);
 }
 
+future<file> new_sstable_component_file_exception(sstring name, open_flags flags, std::exception_ptr ep) {
+    const char* action = (flags == open_flags::ro ? "open" : "create");
+    sstlog.error("Could not {} SSTable component {}. Found exception: {}", action, name, ep);
+    return make_exception_future<file>(ep);
+}
+
 future<file> sstable::new_sstable_component_file(const io_error_handler& error_handler, sstring name, open_flags flags, file_open_options options) {
-    return open_sstable_component_file(error_handler, name, flags, options).handle_exception([name] (auto ep) {
-        sstlog.error("Could not create SSTable component {}. Found exception: {}", name, ep);
-        return make_exception_future<file>(ep);
+    return open_sstable_component_file(error_handler, name, flags, options).handle_exception([name, flags] (auto ep) {
+        return new_sstable_component_file_exception(name, flags, ep);
     });
 }
 
 future<file> sstable::new_sstable_component_file_non_checked(sstring name, open_flags flags, file_open_options options) {
-    return open_sstable_component_file_non_checked(name, flags, options).handle_exception([name] (auto ep) {
-        sstlog.error("Could not create SSTable component {}. Found exception: {}", name, ep);
-        return make_exception_future<file>(ep);
+    return open_sstable_component_file_non_checked(name, flags, options).handle_exception([name, flags] (auto ep) {
+        return new_sstable_component_file_exception(name, flags, ep);
     });
 }
 
