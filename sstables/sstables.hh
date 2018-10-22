@@ -356,13 +356,19 @@ public:
     // Return values are those of a trichotomic comparison.
     int compare_by_max_timestamp(const sstable& other) const;
 
+    const sstring filename(component_type f) const {
+        return filename(get_sst_dir(), _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, f);
+    }
     const sstring get_filename() const {
         return filename(component_type::Data);
+    }
+    const sstring toc_filename() const {
+        return filename(component_type::TOC);
     }
     const sstring& get_dir() const {
         return _dir;
     }
-    sstring toc_filename() const;
+    const sstring& get_sst_dir() const;
 
     metadata_collector& get_metadata_collector() {
         return _collector;
@@ -462,6 +468,7 @@ private:
 
     schema_ptr _schema;
     sstring _dir;
+    std::optional<sstring> _sst_dir;
     unsigned long _generation = 0;
     version_types _version;
     format_types _format;
@@ -477,9 +484,18 @@ private:
 
     sstables_stats _stats;
 
+    static const sstring sst_dir_basename(unsigned long gen) {
+        return fmt::format("{:016d}.sstable", gen);
+    }
+
+    static const sstring sst_dir(const sstring dir, unsigned long gen) {
+        return dir + "/" + sst_dir_basename(gen);
+    }
+
+    future<> lookup_dir();
+
     const bool has_component(component_type f) const;
 
-    const sstring filename(component_type f) const;
     future<file> open_file(component_type, open_flags, file_open_options = {});
 
     template <component_type Type, typename T>

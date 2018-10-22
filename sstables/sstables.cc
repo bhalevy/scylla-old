@@ -970,9 +970,9 @@ future<> sstable::read_toc() {
         return make_ready_future<>();
     }
 
-    auto file_path = filename(component_type::TOC);
-
-    sstlog.debug("Reading TOC file {} ", file_path);
+  return lookup_dir().then([this] {
+      auto file_path = filename(component_type::TOC);
+      sstlog.debug("Reading TOC file {} ", file_path);
 
     return open_checked_file_dma(_read_error_handler, file_path, open_flags::ro).then([this, file_path] (file f) {
         auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
@@ -1019,7 +1019,7 @@ future<> sstable::read_toc() {
             throw;
         }
     });
-
+  });
 }
 
 void sstable::generate_toc(compressor_ptr c, double filter_fp_chance) {
@@ -3719,8 +3719,24 @@ const bool sstable::has_component(component_type f) const {
     return _recognized_components.count(f);
 }
 
-const sstring sstable::filename(component_type f) const {
-    return filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, f);
+const sstring& sstable::get_sst_dir() const {
+    if (_sst_dir) {
+        return *_sst_dir;
+    } else {
+        return _dir;
+    }
+}
+
+future<> sstable::lookup_dir() {
+    if (_sst_dir) {
+        return make_ready_future<>();
+    }
+    return do_with(sst_dir(_dir, _generation), [this] (auto& alt_dir) {
+        return file_exists(alt_dir).then([this, &alt_dir] (bool exists) {
+            _sst_dir = exists ? std::move(alt_dir) : _dir;
+            sstlog.debug("sst_dir={} {}found", alt_dir, exists ? "" : "not ");
+        });
+    });
 }
 
 std::vector<sstring> sstable::component_filenames() const {
@@ -3731,10 +3747,6 @@ std::vector<sstring> sstable::component_filenames() const {
         }
     }
     return res;
-}
-
-sstring sstable::toc_filename() const {
-    return filename(component_type::TOC);
 }
 
 const sstring sstable::filename(sstring dir, sstring ks, sstring cf, version_types version, int64_t generation,

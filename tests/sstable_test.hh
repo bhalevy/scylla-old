@@ -143,6 +143,7 @@ public:
 
     void change_dir(sstring dir) {
         _sst->_dir = dir;
+        _sst->_sst_dir.reset(); // Force lookup of _sst_dir, now based at _dir
     }
 
     void set_data_file_size(uint64_t size) {
