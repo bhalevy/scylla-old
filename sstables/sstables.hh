@@ -181,6 +181,8 @@ public:
                                   format_types format, component_type component);
     static const sstring filename(sstring dir, sstring ks, sstring cf, version_types version, int64_t generation,
                                   format_types format, sstring component);
+    static const sstring lookup_filename(sstring dir, sstring ks, sstring cf, version_types version, int64_t generation, format_types format, component_type component);
+    static const sstring lookup_filename(sstring dir, sstring ks, sstring cf, version_types version, int64_t generation, format_types format, sstring component);
     static future<> remove_by_toc_name(sstring sstable_toc_name, const io_error_handler& error_handler = sstable_write_error_handler);
     // WARNING: it should only be called to remove components of a sstable with
     // a temporary TOC file.
@@ -362,13 +364,18 @@ public:
     // Return values are those of a trichotomic comparison.
     int compare_by_max_timestamp(const sstable& other) const;
 
+    const sstring filename(component_type f) const {
+        return filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, f);
+    }
     const sstring get_filename() const {
         return filename(component_type::Data);
+    }
+    const sstring toc_filename() const {
+        return filename(component_type::TOC);
     }
     const sstring& get_dir() const {
         return _dir;
     }
-    sstring toc_filename() const;
 
     metadata_collector& get_metadata_collector() {
         return _collector;
@@ -494,10 +501,10 @@ private:
 
     const sstring sst_dir() const;
     future<> lookup_dir();
+    future<> touch_dir();
 
     const bool has_component(component_type f) const;
 
-    const sstring filename(component_type f) const;
     future<file> open_file(component_type, open_flags, file_open_options = {});
 
     template <component_type Type, typename T>

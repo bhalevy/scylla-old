@@ -3034,10 +3034,10 @@ static void compare_sstables(sstring result_path, sstring table_name, bool compr
                            component_type::Digest,
                            component_type::Filter}) {
         auto orig_filename =
-                sstable::filename(get_write_test_path(table_name, compressed),
+                sstable::lookup_filename(get_write_test_path(table_name, compressed),
                                   "ks", table_name, sstables::sstable_version_types::mc, 1, big, file_type);
         auto result_filename =
-                sstable::filename(result_path, "ks", table_name, sstables::sstable_version_types::mc, 1, big, file_type);
+                sstable::lookup_filename(result_path, "ks", table_name, sstables::sstable_version_types::mc, 1, big, file_type);
         compare_files(orig_filename, result_filename);
     }
 }

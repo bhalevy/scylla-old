@@ -119,9 +119,8 @@ SEASTAR_TEST_CASE(datafile_generation_01) {
 
         auto sst = make_sstable(s, tmpdir_path, 1, la, big);
 
-        auto fname = sstable::filename(tmpdir_path, "ks", "cf", la, 1, big, component_type::Data);
-        return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s, fname] {
-            return open_file_dma(fname, open_flags::ro).then([] (file f) {
+        return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s] {
+            return open_file_dma(sst->filename(component_type::Data), open_flags::ro).then([] (file f) {
                 auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
 
                 auto fut = f.dma_read(0, bufptr.get(), 4096);
@@ -187,9 +186,8 @@ SEASTAR_TEST_CASE(datafile_generation_02) {
 
         auto sst = make_sstable(s, tmpdir_path, 2, la, big);
 
-        auto fname = sstable::filename(tmpdir_path, "ks", "cf", la, 2, big, component_type::Data);
-        return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s, fname] {
-            return open_file_dma(fname, open_flags::ro).then([] (file f) {
+        return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s] {
+            return open_file_dma(sst->filename(component_type::Data), open_flags::ro).then([] (file f) {
                 auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
 
                 auto fut = f.dma_read(0, bufptr.get(), 4096);
@@ -257,9 +255,8 @@ SEASTAR_TEST_CASE(datafile_generation_03) {
 
         auto sst = make_sstable(s, tmpdir_path, 3, la, big);
 
-        auto fname = sstable::filename(tmpdir_path, "ks", "cf", la, 3, big, component_type::Data);
-        return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s, fname] {
-            return open_file_dma(fname, open_flags::ro).then([] (file f) {
+        return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s] {
+            return open_file_dma(sst->filename(component_type::Data), open_flags::ro).then([] (file f) {
                 auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
 
                 auto fut = f.dma_read(0, bufptr.get(), 4096);
@@ -330,9 +327,8 @@ SEASTAR_TEST_CASE(datafile_generation_04) {
 
         auto sst = make_sstable(s, tmpdir_path, 4, la, big);
 
-        auto fname = sstable::filename(tmpdir_path, "ks", "cf", la, 4, big, component_type::Data);
-        return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s, fname] {
-            return open_file_dma(fname, open_flags::ro).then([] (file f) {
+        return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s] {
+            return open_file_dma(sst->filename(component_type::Data), open_flags::ro).then([] (file f) {
                 auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
 
                 auto fut = f.dma_read(0, bufptr.get(), 4096);
@@ -404,8 +400,7 @@ SEASTAR_TEST_CASE(datafile_generation_05) {
         auto sst = make_sstable(s, tmpdir_path, 5, la, big, now);
 
         return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s, tmpdir_path] {
-            auto fname = sstable::filename(tmpdir_path, "ks", "cf", la, 5, big, component_type::Data);
-            return open_file_dma(fname, open_flags::ro).then([] (file f) {
+            return open_file_dma(sst->filename(component_type::Data), open_flags::ro).then([] (file f) {
                 auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
 
                 auto fut = f.dma_read(0, bufptr.get(), 4096);
@@ -478,8 +473,7 @@ SEASTAR_TEST_CASE(datafile_generation_06) {
         auto sst = make_sstable(s, tmpdir_path, 6, la, big);
 
         return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s, tmpdir_path] {
-            auto fname = sstable::filename(tmpdir_path, "ks", "cf", la, 6, big, component_type::Data);
-            return open_file_dma(fname, open_flags::ro).then([] (file f) {
+            return open_file_dma(sst->filename(component_type::Data), open_flags::ro).then([] (file f) {
                 auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
 
                 auto fut = f.dma_read(0, bufptr.get(), 4096);
@@ -554,8 +548,7 @@ SEASTAR_TEST_CASE(datafile_generation_07) {
         auto sst = make_sstable(s, tmpdir_path, 7, la, big);
 
         return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s, tmpdir_path] {
-            auto fname = sstable::filename(tmpdir_path, "ks", "cf", la, 7, big, component_type::Index);
-            return open_file_dma(fname, open_flags::ro).then([] (file f) {
+            return open_file_dma(sst->filename(component_type::Index), open_flags::ro).then([] (file f) {
                 auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
 
                 auto fut = f.dma_read(0, bufptr.get(), 4096);
@@ -610,8 +603,7 @@ SEASTAR_TEST_CASE(datafile_generation_08) {
         auto sst = make_sstable(s, tmpdir_path, 8, la, big);
 
         return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s, tmpdir_path] {
-            auto fname = sstable::filename(tmpdir_path, "ks", "cf", la, 8, big, component_type::Summary);
-            return open_file_dma(fname, open_flags::ro).then([] (file f) {
+            return open_file_dma(sst->filename(component_type::Summary), open_flags::ro).then([] (file f) {
                 auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
 
                 auto fut = f.dma_read(0, bufptr.get(), 4096);
@@ -716,19 +708,17 @@ static future<> test_digest_and_checksum(sstable_version_types version) {
         auto sst = make_sstable(s, tmpdir_path, 10, version, big);
 
         return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s, version, tmpdir_path] {
-            auto fname = sstable::filename(tmpdir_path, "ks", "cf", version, 10, big, component_type::Data);
-            return open_file_dma(fname, open_flags::ro).then([version, tmpdir_path] (file f) {
+            return open_file_dma(sst->filename(component_type::Data), open_flags::ro).then([sst, version, tmpdir_path] (file f) {
                 auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
 
                 auto fut = f.dma_read(0, bufptr.get(), 4096);
-                return std::move(fut).then([f = std::move(f), bufptr = std::move(bufptr), version, tmpdir_path] (size_t size) mutable {
+                return std::move(fut).then([f = std::move(f), bufptr = std::move(bufptr), sst, version, tmpdir_path] (size_t size) mutable {
                     assert(size > 0 && size < 4096);
                     const char* buf = bufptr.get();
                     uint32_t checksum = ChecksumType::checksum(buf, size);
                     f.close().finally([f]{});
 
-                    auto fname = sstable::filename(tmpdir_path, "ks", "cf", version, 10, big, component_type::CRC);
-                    return open_file_dma(fname, open_flags::ro).then([checksum] (file f) {
+                    return open_file_dma(sst->filename(component_type::CRC), open_flags::ro).then([checksum] (file f) {
                         auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
 
                         auto fut = f.dma_read(0, bufptr.get(), 4096);
@@ -748,9 +738,8 @@ static future<> test_digest_and_checksum(sstable_version_types version) {
                             BOOST_REQUIRE(size == offset);
                             return f.close().finally([f]{});
                         });
-			}).then([tmpdir_path, checksum, version] {
-                        auto fname = sstable::filename(tmpdir_path, "ks", "cf", version, 10, big, component_type::Digest);
-                        return open_file_dma(fname, open_flags::ro).then([checksum] (file f) {
+			}).then([tmpdir_path, checksum, version, sst] {
+                        return open_file_dma(sst->filename(component_type::Digest), open_flags::ro).then([checksum] (file f) {
                             auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
 
                             auto fut = f.dma_read(0, bufptr.get(), 4096);
@@ -1590,8 +1579,7 @@ SEASTAR_TEST_CASE(datafile_generation_40) {
         auto sst = make_sstable(s, tmpdir_path, 40, la, big);
 
         return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s, tmpdir_path] {
-            auto fname = sstable::filename(tmpdir_path, "ks", "cf", la, 40, big, component_type::Data);
-            return open_file_dma(fname, open_flags::ro).then([] (file f) {
+            return open_file_dma(sst->filename(component_type::Data), open_flags::ro).then([] (file f) {
                 auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
 
                 auto fut = f.dma_read(0, bufptr.get(), 4096);
@@ -2078,7 +2066,7 @@ SEASTAR_TEST_CASE(leveled_05) {
 
             return seastar::async([&, generations = std::move(generations), tmpdir_path] {
                 for (auto gen : generations) {
-                    auto fname = sstable::filename(tmpdir_path, "ks", "cf", la, gen, big, component_type::Data);
+                    auto fname = sstable::lookup_filename(tmpdir_path, "ks", "cf", la, gen, big, component_type::Data);
                     BOOST_REQUIRE(file_size(fname).get0() >= 1024*1024);
                 }
             });
