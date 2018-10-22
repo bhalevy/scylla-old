@@ -974,51 +974,51 @@ future<> sstable::read_toc() {
         auto file_path = filename(component_type::TOC);
         sstlog.debug("Reading TOC file {} ", file_path);
 
-    return open_checked_file_dma(_read_error_handler, file_path, open_flags::ro).then([this, file_path] (file f) {
-        auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
-        auto buf = bufptr.get();
+        return open_checked_file_dma(_read_error_handler, file_path, open_flags::ro).then([this, file_path] (file f) {
+            auto bufptr = allocate_aligned_buffer<char>(4096, 4096);
+            auto buf = bufptr.get();
 
-        auto fut = f.dma_read(0, buf, 4096);
-        return std::move(fut).then([this, f = std::move(f), bufptr = std::move(bufptr), file_path] (size_t size) mutable {
-            // This file is supposed to be very small. Theoretically we should check its size,
-            // but if we so much as read a whole page from it, there is definitely something fishy
-            // going on - and this simplifies the code.
-            if (size >= 4096) {
-                throw malformed_sstable_exception("SSTable too big: " + to_sstring(size) + " bytes", file_path);
-            }
-
-            std::experimental::string_view buf(bufptr.get(), size);
-            std::vector<sstring> comps;
-
-            boost::split(comps , buf, boost::is_any_of("\n"));
-
-            for (auto& c: comps) {
-                // accept trailing newlines
-                if (c == "") {
-                    continue;
+            auto fut = f.dma_read(0, buf, 4096);
+            return std::move(fut).then([this, f = std::move(f), bufptr = std::move(bufptr), file_path] (size_t size) mutable {
+                // This file is supposed to be very small. Theoretically we should check its size,
+                // but if we so much as read a whole page from it, there is definitely something fishy
+                // going on - and this simplifies the code.
+                if (size >= 4096) {
+                    throw malformed_sstable_exception("SSTable too big: " + to_sstring(size) + " bytes", file_path);
                 }
-                try {
-                    _recognized_components.insert(reverse_map(c, sstable_version_constants::get_component_map(_version)));
-                } catch (std::out_of_range& oor) {
-                    _unrecognized_components.push_back(c);
-                    sstlog.info("Unrecognized TOC component was found: {} in sstable {}", c, file_path);
+
+                std::experimental::string_view buf(bufptr.get(), size);
+                std::vector<sstring> comps;
+
+                boost::split(comps , buf, boost::is_any_of("\n"));
+
+                for (auto& c: comps) {
+                    // accept trailing newlines
+                    if (c == "") {
+                        continue;
+                    }
+                    try {
+                        _recognized_components.insert(reverse_map(c, sstable_version_constants::get_component_map(_version)));
+                    } catch (std::out_of_range& oor) {
+                        _unrecognized_components.push_back(c);
+                        sstlog.info("Unrecognized TOC component was found: {} in sstable {}", c, file_path);
+                    }
                 }
+                if (!_recognized_components.size()) {
+                    throw malformed_sstable_exception("Empty TOC", file_path);
+                }
+                return f.close().finally([f] {});
+            });
+        }).then_wrapped([file_path] (future<> f) {
+            try {
+                f.get();
+            } catch (std::system_error& e) {
+                if (e.code() == std::error_code(ENOENT, std::system_category())) {
+                    throw malformed_sstable_exception(file_path + ": file not found");
+                }
+                throw;
             }
-            if (!_recognized_components.size()) {
-                throw malformed_sstable_exception("Empty TOC", file_path);
-            }
-            return f.close().finally([f] {});
         });
-    }).then_wrapped([file_path] (future<> f) {
-        try {
-            f.get();
-        } catch (std::system_error& e) {
-            if (e.code() == std::error_code(ENOENT, std::system_category())) {
-                throw malformed_sstable_exception(file_path + ": file not found");
-            }
-            throw;
-        }
-    });
     });
 }
 
