@@ -3692,6 +3692,7 @@ future<> sstable::lookup_dir() {
         return file_exists(alt_dir).then([this, &alt_dir] (bool exists) {
             if (exists) {
                 _dir = std::move(alt_dir);
+                _sst_dir_exists = true;
             }
             _sst_dir_lookedup = true;
             sstlog.debug("sst_dir={} {}found", alt_dir, exists ? "" : "not ");
@@ -3708,6 +3709,7 @@ future<> sstable::touch_dir() {
         return sstable_write_io_check(touch_directory, alt_dir).then([this, &alt_dir] {
             _dir = std::move(alt_dir);
             _sst_dir_lookedup = true;
+            _sst_dir_exists = true;
         });
     });
 }
@@ -3816,26 +3818,45 @@ future<> sstable::create_links(sstring dir, int64_t generation) const {
     });
 }
 
+sstring
+basename(const sstring& fname) {
+    return boost::filesystem::canonical(std::string(fname)).filename().string();
+}
+
+sstring
+dirname(const sstring& fname) {
+    return boost::filesystem::canonical(std::string(fname)).parent_path().string();
+}
+
+future<sstring> sstable::set_generation_setup(unsigned long new_generation) const {
+    if (_sst_dir_exists) {
+        auto dst = sst_dir(dirname(_dir), new_generation);
+        return sstable_write_io_check(touch_directory, dst).then([dst = std::move(dst)] {
+            return make_ready_future<sstring>(dst);
+        });
+    } else {
+        return make_ready_future<sstring>(_dir);
+    }
+}
+
+future<> sstable::set_generation_cleanup(unsigned long new_generation) {
+    _generation = new_generation;
+    if (_sst_dir_exists) {
+        _dir = sst_dir(dirname(_dir), new_generation);
+    }
+    return make_ready_future<>();
+}
+
 future<> sstable::set_generation(unsigned long new_generation) {
     if (new_generation == _generation) {
         return make_ready_future<>();
     }
-    // FIXME: touch sst_dir for new generation
-    return create_links(_dir, new_generation).then([this] {
-        return remove_file(filename(component_type::TOC)).then([this] {
-            return sstable_write_io_check(sync_directory, _dir);
-        }).then([this] {
-            return parallel_for_each(all_components(), [this] (auto p) {
-                if (p.first == component_type::TOC) {
-                    return make_ready_future<>();
-                }
-                return remove_file(sstable::filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, p.second));
-            });
-        });
-    }).then([this, new_generation] {
-        return sync_directory(_dir).then([this, new_generation] {
-            // FIXME: remove current sst_dir
-            _generation = new_generation;
+
+    return set_generation_setup(new_generation).then([=] (auto dst) {
+        return create_links(dst, new_generation).then([this] {
+            return remove();
+        }).then([this, dst = std::move(dst), new_generation] {
+            return set_generation_cleanup(new_generation);
         });
     });
 }
@@ -4115,16 +4136,6 @@ sstable::~sstable() {
         }
 
     }
-}
-
-sstring
-basename(sstring fname) {
-    return boost::filesystem::canonical(std::string(fname)).filename().string();
-}
-
-sstring
-dirname(sstring fname) {
-    return boost::filesystem::canonical(std::string(fname)).parent_path().string();
 }
 
 future<>

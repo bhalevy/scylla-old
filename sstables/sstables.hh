@@ -476,6 +476,7 @@ private:
     schema_ptr _schema;
     sstring _dir;
     bool _sst_dir_lookedup = false;
+    bool _sst_dir_exists = false;
     unsigned long _generation = 0;
     version_types _version;
     format_types _format;
@@ -502,6 +503,9 @@ private:
     const sstring sst_dir() const;
     future<> lookup_dir();
     future<> touch_dir();
+
+    future<sstring> set_generation_setup(unsigned long generation) const;
+    future<> set_generation_cleanup(unsigned long generation);
 
     const bool has_component(component_type f) const;
 
