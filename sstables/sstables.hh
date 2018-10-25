@@ -501,6 +501,9 @@ private:
     future<> lookup_dir();
     future<> touch_dir();
 
+    future<sstring> set_generation_setup(unsigned long generation) const;
+    future<> set_generation_cleanup(unsigned long generation);
+
     const bool has_component(component_type f) const;
 
     future<file> open_file(component_type, open_flags, file_open_options = {});
