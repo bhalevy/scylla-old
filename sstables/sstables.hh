@@ -624,6 +624,8 @@ private:
         serialization_header& s = *static_cast<serialization_header *>(p.get());
         return s;
     }
+
+    static future<> final_remove_by_toc(sstring dir, sstring tmp_toc_name, unsigned long gen, const io_error_handler& error_handler);
 public:
     future<> read_toc();
 
@@ -797,6 +799,9 @@ struct entry_descriptor {
     component_type component;
 
     static entry_descriptor make_descriptor(sstring sstdir, sstring fname);
+
+    // make descriptor from filename only, may lack ks, cf
+    static entry_descriptor make_descriptor(sstring fname);
 
     entry_descriptor(sstring sstdir, sstring ks, sstring cf, sstable::version_types version,
                      int64_t generation, sstable::format_types format,
