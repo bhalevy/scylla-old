@@ -1214,20 +1214,6 @@ SEASTAR_TEST_CASE(sub_partitions_read) {
   });
 }
 
-// A silly, inefficient but effective, way to compare two files by reading
-// them entirely into memory.
-static future<> compare_files(sstring file1, sstring file2) {
-    return read_file(file1).then([file2] (auto in1) {
-        return read_file(file2).then([in1 = std::move(in1)] (auto in2) {
-            // assert that both files have the same size.
-            BOOST_REQUIRE(in1.second == in2.second);
-            // assert that both files have the same content.
-            BOOST_REQUIRE(::memcmp(in1.first.get(), in2.first.get(), in1.second) == 0);
-        });
-    });
-
-}
-
 // This test creates the same data as we previously created with Cassandra
 // in the tests/sstables/large_partition directory (which we read in the
 // promoted_index_read test above). The index file in both sstables - which
@@ -1259,8 +1245,9 @@ SEASTAR_TEST_CASE(promoted_index_write) {
         auto sst = make_sstable(s, dirname, 100,
                 sstables::sstable::version_types::la, big);
         return write_memtable_to_sstable_for_test(*mtp, sst).then([s, dirname] {
-            auto large_partition_file = seastar::sprint("%s/la-3-big-Index.db", get_test_dir("large_partition", s));
-            return compare_files(large_partition_file, dirname + "/la-100-big-Index.db");
+            return compare_files(sstdesc{get_test_dir("large_partition", s), 3 },
+                                 sstdesc{dirname, 100 },
+                                 component_type::Index);
         }).then([sst, mtp] {});
     });
 }
