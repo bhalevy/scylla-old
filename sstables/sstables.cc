@@ -3881,6 +3881,40 @@ entry_descriptor entry_descriptor::make_descriptor(sstring sstdir, sstring fname
     return entry_descriptor(sstdir, ks, cf, version, boost::lexical_cast<unsigned long>(generation), sstable::format_from_sstring(format), sstable::component_from_sstring(version, component));
 }
 
+entry_descriptor entry_descriptor::make_descriptor(sstring fname) {
+    static std::regex la_mc("(la|mc)-(\\d+)-(\\w+)-(.*)");
+    static std::regex ka("(\\w+)-(\\w+)-ka-(\\d+)-(.*)");
+
+    std::smatch match;
+
+    sstable::version_types version;
+
+    sstring generation;
+    sstring format;
+    sstring component;
+    sstring ks = "";
+    sstring cf = "";
+
+    sstlog.debug("Make descriptor: fname: {}", fname);
+    std::string s(fname);
+    if (std::regex_match(s, match, la_mc)) {
+        version = (match[1].str() == "la") ? sstable::version_types::la : sstable::version_types::mc;
+        generation = match[2].str();
+        format = sstring(match[3].str());
+        component = sstring(match[4].str());
+    } else if (std::regex_match(s, match, ka)) {
+        ks = match[1].str();
+        cf = match[2].str();
+        version = sstable::version_types::ka;
+        format = sstring("big");
+        generation = match[3].str();
+        component = sstring(match[4].str());
+    } else {
+        throw malformed_sstable_exception(seastar::sprint("invalid version for file %s. Name doesn't match any known version.", fname));
+    }
+    return entry_descriptor("", ks, cf, version, boost::lexical_cast<unsigned long>(generation), sstable::format_from_sstring(format), sstable::component_from_sstring(version, component));
+}
+
 sstable::version_types sstable::version_from_sstring(sstring &s) {
     try {
         return reverse_map(s, _version_string);
@@ -4081,6 +4115,11 @@ sstable::~sstable() {
 }
 
 sstring
+basename(sstring fname) {
+    return boost::filesystem::canonical(std::string(fname)).filename().string();
+}
+
+sstring
 dirname(sstring fname) {
     return boost::filesystem::canonical(std::string(fname)).parent_path().string();
 }
@@ -4099,23 +4138,52 @@ fsync_directory(const io_error_handler& error_handler, sstring fname) {
 }
 
 future<>
+sstable::final_remove_by_toc(sstring dir, sstring tmp_toc_name, unsigned long gen, const io_error_handler& error_handler) {
+    return sstable_io_check(error_handler, remove_file, tmp_toc_name).then([dir, tmp_toc_name, gen, &error_handler] {
+        fsync_directory(error_handler, dir).then([dir, tmp_toc_name, gen, &error_handler] {
+            if (basename(dir) == sst_dir_basename(gen)) {
+                for (const auto& entry : boost::filesystem::directory_iterator(dir.c_str())) {
+                    if (boost::filesystem::is_directory(entry)) {
+                        auto filename = entry.path().filename();
+                        if (filename != "upload" && filename != "snapshots") {
+                            sstlog.info("Unrecognized sub-directory: {}", entry.path().string());
+                        } else {
+                            auto subdir = entry.path().string();
+                            remove_file(subdir).handle_exception([subdir] (auto ep) {
+                                sstlog.warn("Could not remove {}: {}", subdir, ep);
+                            });
+                        }
+                    } else {
+                        sstlog.info("Unrecognized file: {}", entry.path().string());
+                    }
+                }
+                remove_file(dir).then([error_handler, parent = dirname(dir)] {
+                    fsync_directory(error_handler, parent);
+                }).handle_exception([dir] (auto ep) {
+                    sstlog.warn("Could not remove {}: {}", dir, ep);
+                });
+            }
+        });
+    });
+}
+
+future<>
 sstable::remove_by_toc_name(sstring sstable_toc_name, const io_error_handler& error_handler) {
     return seastar::async([sstable_toc_name, &error_handler] () mutable {
         sstring prefix = sstable_toc_name.substr(0, sstable_toc_name.size() - sstable_version_constants::TOC_SUFFIX.size());
         auto new_toc_name = prefix + sstable_version_constants::TEMPORARY_TOC_SUFFIX;
-        sstring dir;
+        sstring dir = dirname(sstable_toc_name);
+        auto comps = entry_descriptor::make_descriptor(basename(sstable_toc_name));
 
         if (sstable_io_check(error_handler, file_exists, sstable_toc_name).get0()) {
-            dir = dirname(sstable_toc_name);
             sstable_io_check(error_handler, rename_file, sstable_toc_name, new_toc_name).get();
             fsync_directory(error_handler, dir).get();
-        } else if (sstable_io_check(error_handler, file_exists, new_toc_name).get0()) {
-            dir = dirname(new_toc_name);
-        } else {
+        } else if (!sstable_io_check(error_handler, file_exists, new_toc_name).get0()) {
             sstlog.warn("Unable to delete {} because it doesn't exist.", sstable_toc_name);
             return;
         }
 
+        sstlog.info("Deleting sstable by toc {}", sstable_toc_name);
         auto toc_file = open_checked_file_dma(error_handler, new_toc_name, open_flags::ro).get0();
         auto in = make_file_input_stream(toc_file);
         auto size = toc_file.size().get0();
@@ -4147,26 +4215,27 @@ sstable::remove_by_toc_name(sstring sstable_toc_name, const io_error_handler& er
                 return make_ready_future<>();
             });
         }).get();
-        fsync_directory(error_handler, dir).get();
-        sstable_io_check(error_handler, remove_file, new_toc_name).get();
-        // FIXME: remove <generation>.sstable dir
+        final_remove_by_toc(dir, new_toc_name, comps.generation, error_handler).get();
     });
 }
 
 future<>
 sstable::remove_sstable_with_temp_toc(sstring ks, sstring cf, sstring dir, int64_t generation, version_types v, format_types f) {
-    return seastar::async([ks, cf, dir, generation, v, f] {
+    return seastar::async([ks, cf, dir, generation, v, f] () mutable {
         const io_error_handler& error_handler = sstable_write_error_handler;
-        auto toc = sstable_io_check(error_handler, file_exists, filename(dir, ks, cf, v, generation, f, component_type::TOC)).get0();
+        auto toc = sstable_io_check(error_handler, file_exists, lookup_filename(dir, ks, cf, v, generation, f, component_type::TOC)).get0();
 
         sstlog.warn("Deleting components of sstable from {}.{} of generation {} that has a temporary TOC", ks, cf, generation);
 
         // assert that toc doesn't exist for sstable with temporary toc.
         assert(toc == false);
 
-        auto tmptoc = sstable_io_check(error_handler, file_exists, filename(dir, ks, cf, v, generation, f, component_type::TemporaryTOC)).get0();
+        auto tmptoc_filename = lookup_filename(dir, ks, cf, v, generation, f, component_type::TemporaryTOC);
+        auto tmptoc = sstable_io_check(error_handler, file_exists, tmptoc_filename).get0();
         // assert that temporary toc exists for this sstable.
         assert(tmptoc == true);
+        dir = dirname(tmptoc_filename);
+        auto comps = entry_descriptor::make_descriptor(basename(tmptoc_filename));
 
         for (auto& entry : sstable_version_constants::get_component_map(v)) {
             // Skipping TemporaryTOC because it must be the last component to
@@ -4188,12 +4257,7 @@ sstable::remove_sstable_with_temp_toc(sstring ks, sstring cf, sstring dir, int64
             }
             sstable_io_check(error_handler, remove_file, file_path).get();
         }
-        fsync_directory(error_handler, dir).get();
-        // Removing temporary
-        sstable_io_check(error_handler, remove_file, filename(dir, ks, cf, v, generation, f, component_type::TemporaryTOC)).get();
-        // Fsync'ing column family dir to guarantee that deletion completed.
-        fsync_directory(error_handler, dir).get();
-        // FIXME: remove <generation>.sstable dir
+        final_remove_by_toc(dir, filename(dir, ks, cf, v, generation, f, component_type::TemporaryTOC), comps.generation, error_handler).get();
     });
 }
 
