@@ -3862,6 +3862,9 @@ future<> sstable::create_links(sstring dir, int64_t generation) {
 }
 
 future<> sstable::set_generation(int64_t new_generation) {
+    if (new_generation == static_cast<int64_t>(_generation)) {
+        return make_ready_future<>();
+    }
     // FIXME: touch sst_dir for new generation
     return create_links(_dir, new_generation).then([this] {
         return remove_file(filename(component_type::TOC)).then([this] {
