@@ -181,10 +181,16 @@ public:
                                   format_types format, component_type component);
     static const sstring filename(sstring dir, sstring ks, sstring cf, version_types version, int64_t generation,
                                   format_types format, sstring component);
+    static future<> remove_by_toc_name(sstring sstable_toc_name, const io_error_handler& error_handler = sstable_write_error_handler);
     // WARNING: it should only be called to remove components of a sstable with
     // a temporary TOC file.
     static future<> remove_sstable_with_temp_toc(sstring ks, sstring cf, sstring dir, int64_t generation,
                                                  version_types v, format_types f);
+
+    // remove all sstable components and per-sstable directory if exists.
+    future<> remove(const io_error_handler& error_handler = sstable_write_error_handler) {
+        return remove_by_toc_name(toc_filename(), error_handler);
+    }
 
     // load sstable using components shared by a shard
     future<> load(foreign_sstable_open_info info);

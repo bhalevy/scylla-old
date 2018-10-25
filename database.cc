@@ -42,7 +42,6 @@
 #include <boost/algorithm/string/split.hpp>
 #include "sstables/sstables.hh"
 #include "sstables/compaction.hh"
-#include "sstables/remove.hh"
 #include <boost/range/adaptor/transformed.hpp>
 #include <boost/range/adaptor/map.hpp>
 #include "locator/simple_snitch.hh"
@@ -1163,7 +1162,7 @@ distributed_loader::flush_upload_dir(distributed<database>& db, sstring ks_name,
                     }).then([&cf, sst, gen] {
                         return sst->create_links(cf._config.datadir, gen);
                     }).then([sst] {
-                        return sstables::remove_by_toc_name(sst->toc_filename(), error_handler_for_upload_dir());
+                        return sst->remove(error_handler_for_upload_dir());
                     }).then([sst, &cf, gen, comps = comps, &work] () mutable {
                         comps.generation = gen;
                         comps.sstdir = cf._config.datadir;

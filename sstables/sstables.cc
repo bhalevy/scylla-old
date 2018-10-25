@@ -42,7 +42,6 @@
 #include "compress.hh"
 #include "unimplemented.hh"
 #include "index_reader.hh"
-#include "remove.hh"
 #include "memtable.hh"
 #include "range.hh"
 #include "downsampling.hh"
@@ -4054,9 +4053,6 @@ int sstable::compare_by_max_timestamp(const sstable& other) const {
     return (ts1 > ts2 ? 1 : (ts1 == ts2 ? 0 : -1));
 }
 
-future<>
-delete_sstables(std::vector<sstring> tocs);
-
 sstable::~sstable() {
     if (_index_file) {
         _index_file.close().handle_exception([save = _index_file, op = background_jobs().start()] (auto ep) {
@@ -4079,7 +4075,7 @@ sstable::~sstable() {
         // clean up unused sstables, and because we'll never reuse the same
         // generation number anyway.
         try {
-            delete_sstables({filename(component_type::TOC)}).handle_exception(
+            remove().handle_exception(
                         [op = background_jobs().start()] (std::exception_ptr eptr) {
                             try {
                                 std::rethrow_exception(eptr);
@@ -4113,7 +4109,7 @@ fsync_directory(const io_error_handler& error_handler, sstring fname) {
 }
 
 future<>
-remove_by_toc_name(sstring sstable_toc_name, const io_error_handler& error_handler) {
+sstable::remove_by_toc_name(sstring sstable_toc_name, const io_error_handler& error_handler) {
     return seastar::async([sstable_toc_name, &error_handler] () mutable {
         sstring prefix = sstable_toc_name.substr(0, sstable_toc_name.size() - sstable_version_constants::TOC_SUFFIX.size());
         auto new_toc_name = prefix + sstable_version_constants::TEMPORARY_TOC_SUFFIX;
@@ -4320,14 +4316,6 @@ utils::hashed_key sstable::make_hashed_key(const schema& s, const partition_key&
 }
 
 future<>
-delete_sstables(std::vector<sstring> tocs) {
-    // FIXME: this needs to be done atomically (using a log file of sstables we intend to delete)
-    return parallel_for_each(tocs, [] (sstring name) {
-        return remove_by_toc_name(name);
-    });
-}
-
-future<>
 delete_atomically(std::vector<shared_sstable> ssts, const db::large_partition_handler& large_partition_handler) {
     // Asynchronously issue delete operations for large partitions, do not handle their outcome.
     // If any of the operations fail, large_partition_handler should be responsible for logging or otherwise handling it.
@@ -4337,7 +4325,9 @@ delete_atomically(std::vector<shared_sstable> ssts, const db::large_partition_ha
     auto sstables_to_delete_atomically = boost::copy_range<std::vector<sstring>>(ssts
             | boost::adaptors::transformed([] (auto&& sst) { return sst->toc_filename(); }));
 
-    return delete_sstables(std::move(sstables_to_delete_atomically));
+    return parallel_for_each(sstables_to_delete_atomically, [] (sstring name) {
+        return sstable::remove_by_toc_name(name);
+    });
 }
 
 thread_local sstables_stats::stats sstables_stats::_shard_stats;
