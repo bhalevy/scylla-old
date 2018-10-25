@@ -203,7 +203,7 @@ public:
     future<> open_data();
     future<> update_info_for_opened_data();
 
-    future<> set_generation(int64_t generation);
+    future<> set_generation(unsigned long generation);
 
     int64_t generation() const {
         return _generation;
