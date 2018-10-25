@@ -3805,6 +3805,9 @@ future<> sstable::create_links(sstring dir, int64_t generation) const {
 }
 
 future<> sstable::set_generation(int64_t new_generation) {
+    if (new_generation == static_cast<int64_t>(_generation)) {
+        return make_ready_future<>();
+    }
     return create_links(_dir, new_generation).then([this] {
         return remove_file(filename(component_type::TOC)).then([this] {
             return sstable_write_io_check(sync_directory, _dir);
