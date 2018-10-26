@@ -700,14 +700,24 @@ public:
         });
     }
 
+    static void recursive_copy_dir(sstring from, sstring to) {
+        for (const auto& entry : boost::filesystem::directory_iterator(from.c_str())) {
+            auto to_path = boost::filesystem::path(to)/entry.path().filename();
+            if (boost::filesystem::is_directory(entry)) {
+                boost::filesystem::create_directories(to_path);
+                recursive_copy_dir(entry.path().string(), to_path.string());
+            } else {
+                boost::filesystem::copy(entry.path(), to_path);
+            }
+        }
+    }
+
     static future<> do_with_cloned_tmp_directory(sstring src, std::function<future<> (sstring srcdir_path, sstring destdir_path)>&& fut) {
         return seastar::async([fut = std::move(fut), src = std::move(src)] {
             storage_service_for_tests ssft;
             auto src_dir = make_lw_shared<tmpdir>();
             auto dest_dir = make_lw_shared<tmpdir>();
-            for (const auto& entry : boost::filesystem::directory_iterator(src.c_str())) {
-                boost::filesystem::copy(entry.path(), boost::filesystem::path(src_dir->path)/entry.path().filename());
-            }
+            recursive_copy_dir(src, src_dir->path);
             auto dest_path = boost::filesystem::path(dest_dir->path)/src.c_str();
             boost::filesystem::create_directories(dest_path);
             fut(src_dir->path, dest_path.string()).get();
