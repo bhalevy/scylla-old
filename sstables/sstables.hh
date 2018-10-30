@@ -356,13 +356,37 @@ public:
     // Return values are those of a trichotomic comparison.
     int compare_by_max_timestamp(const sstable& other) const;
 
+    const sstring filename(component_type f) const {
+        return filename(get_sst_dir(), _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, f);
+    }
+
     const sstring get_filename() const {
         return filename(component_type::Data);
     }
+
+    const sstring toc_filename() const {
+        return filename(component_type::TOC);
+    }
+
+    static const sstring sst_dir_basename(unsigned long gen) {
+        return fmt::format("{:016d}.sstable", gen);
+    }
+
+    static const sstring sst_dir(const sstring dir, unsigned long gen) {
+        return dir + "/" + sst_dir_basename(gen);
+    }
+
+    const sstring& get_sst_dir() const {
+        if (_sst_dir) {
+            return *_sst_dir;
+        } else {
+            return _dir;
+        }
+    }
+
     const sstring& get_dir() const {
         return _dir;
     }
-    sstring toc_filename() const;
 
     metadata_collector& get_metadata_collector() {
         return _collector;
@@ -462,6 +486,7 @@ private:
 
     schema_ptr _schema;
     sstring _dir;
+    std::optional<sstring> _sst_dir; // Valid while the sstable is being created, until sealed
     unsigned long _generation = 0;
     version_types _version;
     format_types _format;
@@ -479,7 +504,6 @@ private:
 
     const bool has_component(component_type f) const;
 
-    const sstring filename(component_type f) const;
     future<file> open_file(component_type, open_flags, file_open_options = {});
 
     template <component_type Type, typename T>
@@ -487,6 +511,8 @@ private:
 
     template <component_type Type, typename T>
     void write_simple(const T& comp, const io_priority_class& pc);
+
+    future<> touch_sst_dir();
 
     void generate_toc(compressor_ptr c, double filter_fp_chance);
     void write_toc(const io_priority_class& pc);

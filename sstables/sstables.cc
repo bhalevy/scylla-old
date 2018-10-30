@@ -1043,6 +1043,7 @@ void sstable::generate_toc(compressor_ptr c, double filter_fp_chance) {
 }
 
 void sstable::write_toc(const io_priority_class& pc) {
+    touch_sst_dir().get0();
     auto file_path = filename(component_type::TemporaryTOC);
 
     sstlog.debug("Writing TOC file {} ", file_path);
@@ -1086,24 +1087,47 @@ void sstable::write_toc(const io_priority_class& pc) {
 }
 
 future<> sstable::seal_sstable() {
-    // SSTable sealing is about renaming temporary TOC file after guaranteeing
-    // that each component reached the disk safely.
-    return open_checked_directory(_write_error_handler, _dir).then([this] (file dir_f) {
-        // Guarantee that every component of this sstable reached the disk.
-        return sstable_write_io_check([&] { return dir_f.flush(); }).then([this] {
-            // Rename TOC because it's no longer temporary.
-            return sstable_write_io_check([&] {
-                return engine().rename_file(filename(component_type::TemporaryTOC), filename(component_type::TOC));
+    // SSTable sealing moves all components from the sstable directory
+    // to the shared, table directory, lastly renaming the temporary TOC
+    // after guaranteeing that each component reached the disk safely.
+    sstlog.debug("Sealing sstable {} into {}", *_sst_dir, _dir);
+    auto src = sstable::filename(*_sst_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, component_type::TemporaryTOC);
+    auto dst = sstable::filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, component_type::TemporaryTOC);
+    return sstable_write_io_check(::rename_file, src, dst).then([this] {
+        return parallel_for_each(all_components(), [this] (auto p) {
+            if (p.first == component_type::TOC) {
+                return make_ready_future<>();
+            }
+            auto src = sstable::filename(*_sst_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, p.second);
+            auto dst = sstable::filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, p.second);
+            // FIXME: implement rename_file_if_exists in seastar
+            return file_exists(src).then([this, src = std::move(src), dst = std::move(dst)] (bool exists) {
+                if (exists) {
+                    return sstable_write_io_check(::rename_file, std::move(src), std::move(dst));
+                } else {
+                    return make_ready_future<>();
+                }
             });
-        }).then([this, dir_f] () mutable {
-            // Guarantee that the changes above reached the disk.
-            return sstable_write_io_check([&] { return dir_f.flush(); });
-        }).then([this, dir_f] () mutable {
-            return sstable_write_io_check([&] { return dir_f.close(); });
-        }).then([this, dir_f] {
-            // If this point was reached, sstable should be safe in disk.
-            sstlog.debug("SSTable with generation {} of {}.{} was sealed successfully.", _generation, _schema->ks_name(), _schema->cf_name());
         });
+    }).then([this] {
+        // Guarantee that the changes above reached the disk.
+        return sstable_write_io_check(sync_directory, _dir);
+    }).then([&] () mutable {
+        return sstable_write_io_check(sync_directory, *_sst_dir);
+    }).then([this] () mutable {
+        return sstable_write_io_check(remove_file, *_sst_dir).then([this] {
+            _sst_dir.reset();
+        });
+    }).then([this] {
+        auto src = sstable::filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, component_type::TemporaryTOC);
+        auto dst = sstable::filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, component_type::TOC);
+        return sstable_write_io_check(::rename_file, src, dst);
+    }).then([this] {
+        // Guarantee that the changes above reached the disk.
+        return sstable_write_io_check(sync_directory, _dir);
+    }).then([this] {
+        // If this point was reached, sstable should be safe in disk.
+        sstlog.debug("SSTable with generation {} of {}.{} was sealed successfully.", _generation, _schema->ks_name(), _schema->cf_name());
     });
 }
 
@@ -3714,8 +3738,18 @@ const bool sstable::has_component(component_type f) const {
     return _recognized_components.count(f);
 }
 
-const sstring sstable::filename(component_type f) const {
-    return filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, f);
+future<> sstable::touch_sst_dir() {
+    if (_sst_dir) {
+        return make_ready_future<>();
+    }
+    return do_with(sst_dir(_dir, _generation), [this] (auto& alt_dir) {
+        sstlog.debug("Touching sst_dir={}", alt_dir);
+        return sstable_write_io_check(touch_directory, alt_dir).then([this, &alt_dir] {
+            return sstable_write_io_check(sync_directory, _dir).then([this, &alt_dir] {
+                _sst_dir = std::move(alt_dir);
+            });
+        });
+    });
 }
 
 std::vector<sstring> sstable::component_filenames() const {
@@ -3726,10 +3760,6 @@ std::vector<sstring> sstable::component_filenames() const {
         }
     }
     return res;
-}
-
-sstring sstable::toc_filename() const {
-    return filename(component_type::TOC);
 }
 
 const sstring sstable::filename(sstring dir, sstring ks, sstring cf, version_types version, int64_t generation,
@@ -3777,6 +3807,7 @@ std::vector<std::pair<component_type, sstring>> sstable::all_components() const 
 }
 
 future<> sstable::create_links(sstring dir, int64_t generation) const {
+    sstlog.debug("Creating links from {} generation {} to {} generation {}", get_sst_dir(), _generation, dir, generation);
     // TemporaryTOC is always first, TOC is always last
     auto dst = sstable::filename(dir, _schema->ks_name(), _schema->cf_name(), _version, generation, _format, component_type::TemporaryTOC);
     return sstable_write_io_check(::link_file, filename(component_type::TOC), dst).then([this, dir] {
@@ -3787,7 +3818,7 @@ future<> sstable::create_links(sstring dir, int64_t generation) const {
             if (p.first == component_type::TOC) {
                 return make_ready_future<>();
             }
-            auto src = sstable::filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, p.second);
+            auto src = sstable::filename(get_sst_dir(), _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, p.second);
             auto dst = sstable::filename(dir, _schema->ks_name(), _schema->cf_name(), _version, generation, _format, p.second);
             return this->sstable_write_io_check(::link_file, std::move(src), std::move(dst));
         });
