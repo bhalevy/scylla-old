@@ -3732,8 +3732,13 @@ const sstring& sstable::get_sst_dir() const {
     }
 }
 
+inline bool sstable_directory_enabled() {
+    return !service::get_storage_service().local_is_initialized() ||
+            service::get_local_storage_service().cluster_supports_sstable_directory();
+}
+
 future<> sstable::lookup_dir() {
-    if (_sst_dir) {
+    if (!sstable_directory_enabled() || _sst_dir) {
         return make_ready_future<>();
     }
     return do_with(sst_dir(_dir, _generation), [this] (auto& alt_dir) {
@@ -3745,7 +3750,7 @@ future<> sstable::lookup_dir() {
 }
 
 future<> sstable::touch_dir() {
-    if (_sst_dir) {
+    if (!sstable_directory_enabled() || _sst_dir) {
         return make_ready_future<>();
     }
     return do_with(sst_dir(_dir, _generation), [this] (auto& alt_dir) {
