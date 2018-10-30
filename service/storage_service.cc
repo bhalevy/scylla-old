@@ -101,6 +101,7 @@ static const sstring ROLES_FEATURE = "ROLES";
 static const sstring LA_SSTABLE_FEATURE = "LA_SSTABLE_FORMAT";
 static const sstring STREAM_WITH_RPC_STREAM = "STREAM_WITH_RPC_STREAM";
 static const sstring MC_SSTABLE_FEATURE = "MC_SSTABLE_FORMAT";
+static const sstring SSTABLE_DIRECTORY = "SSTABLE_DIRECTORY";
 
 distributed<storage_service> _the_storage_service;
 
@@ -213,6 +214,9 @@ sstring storage_service::get_config_supported_features() {
     auto& config = service::get_local_storage_service()._db.local().get_config();
     if (config.enable_sstables_mc_format()) {
         features.push_back(MC_SSTABLE_FEATURE);
+    }
+    if (config.enable_sstable_directory()) {
+        features.push_back(SSTABLE_DIRECTORY);
     }
     if (config.experimental()) {
         features.push_back(MATERIALIZED_VIEWS_FEATURE);
@@ -432,6 +436,7 @@ void storage_service::register_features() {
     _la_sstable_feature = gms::feature(LA_SSTABLE_FEATURE);
     _stream_with_rpc_stream_feature = gms::feature(STREAM_WITH_RPC_STREAM);
     _mc_sstable_feature = gms::feature(MC_SSTABLE_FEATURE);
+    _sstable_directory = gms::feature(SSTABLE_DIRECTORY);
 
     if (_db.local().get_config().experimental()) {
         _materialized_views_feature = gms::feature(MATERIALIZED_VIEWS_FEATURE);
