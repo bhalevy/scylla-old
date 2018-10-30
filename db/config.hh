@@ -740,6 +740,7 @@ public:
     val(cpu_scheduler, bool, true, Used, "Enable cpu scheduling") \
     val(view_building, bool, true, Used, "Enable view building; should only be set to false when the node is experience issues due to view building") \
     val(enable_sstables_mc_format, bool, false, Used, "Enable SSTables 'mc' format to be used as the default file format; FOR TESTING PURPOSES ONLY - TO BE REMOVED BEFORE RELEASE") \
+    val(enable_sstable_directory, bool, false, Used, "Enable per-SSTable directory.") \
     /* done! */
 
 #define _make_value_member(name, type, deflt, status, desc, ...)    \
