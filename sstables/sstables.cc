@@ -3794,18 +3794,21 @@ std::vector<std::pair<component_type, sstring>> sstable::all_components() const 
     return all;
 }
 
-future<> sstable::create_links(sstring dir, int64_t generation) const {
+future<> sstable::create_links(sstring dir, int64_t generation) {
     // TemporaryTOC is always first, TOC is always last
+    sstlog.debug("Creating links from {} generation {} to {} generation {}", get_sst_dir(), _generation, dir, generation);
     auto dst = sstable::filename(dir, _schema->ks_name(), _schema->cf_name(), _version, generation, _format, component_type::TemporaryTOC);
-    return sstable_write_io_check(::link_file, filename(component_type::TOC), dst).then([this, dir] {
-        return sstable_write_io_check(sync_directory, dir);
+    return lookup_dir().then([this, dst, dir] {
+        return sstable_write_io_check(::link_file, filename(component_type::TOC), dst).then([this, dir] {
+            return sstable_write_io_check(sync_directory, dir);
+        });
     }).then([this, dir, generation] {
         // FIXME: Should clean already-created links if we failed midway.
         return parallel_for_each(all_components(), [this, dir, generation] (auto p) {
             if (p.first == component_type::TOC) {
                 return make_ready_future<>();
             }
-            auto src = sstable::filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, p.second);
+            auto src = sstable::filename(get_sst_dir(), _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, p.second);
             auto dst = sstable::filename(dir, _schema->ks_name(), _schema->cf_name(), _version, generation, _format, p.second);
             return this->sstable_write_io_check(::link_file, std::move(src), std::move(dst));
         });
