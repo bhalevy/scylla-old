@@ -1142,8 +1142,8 @@ thread_local std::array<std::vector<int>, downsampling::BASE_SAMPLING_LEVEL> dow
 
 
 template <component_type Type, typename T>
-future<> sstable::read_simple(T& component, const io_priority_class& pc) {
-
+future<> sstable::read_simple(T& component, const io_priority_class& pclass) {
+  return lookup_dir().then([&] {
     auto file_path = filename(Type);
     sstlog.debug(("Reading " + sstable_version_constants::get_component_map(_version).at(Type) + " file {} ").c_str(), file_path);
     return open_file_dma(file_path, open_flags::ro).then([this, &component] (file fi) {
@@ -1166,6 +1166,7 @@ future<> sstable::read_simple(T& component, const io_priority_class& pc) {
             throw;
         }
     });
+  });
 }
 
 template <component_type Type, typename T>
