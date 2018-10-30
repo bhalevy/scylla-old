@@ -114,19 +114,40 @@ static future<file> open_sstable_component_file_non_checked(sstring name, open_f
     return open_file_dma(name, flags, options);
 }
 
+future<file> sstable::rename_new_sstable_component_file(sstring from_name, sstring to_name, file fd) {
+    return sstable_write_io_check(rename_file, from_name, to_name).handle_exception([from_name, to_name] (std::exception_ptr ep) {
+        sstlog.error("Could not rename SSTable component {} to {}. Found exception: {}", from_name, to_name, ep);
+        return make_exception_future<>(ep);
+    }).then([fd = std::move(fd)] {
+        return make_ready_future<file>(fd);
+    });
+}
+
 future<file> sstable::new_sstable_component_file(const io_error_handler& error_handler, component_type f, open_flags flags, file_open_options options) {
-    auto name = filename(f);
-    return open_sstable_component_file(error_handler, name, flags, options).handle_exception([name] (auto ep) {
+    auto create_flags = open_flags::create | open_flags::exclusive;
+    if ((flags & create_flags) != create_flags) {
+        return open_sstable_component_file(error_handler, filename(f), flags, options);
+    }
+    auto name = _temp_dir ? temp_filename(f) : filename(f);
+    return open_sstable_component_file(error_handler, name, flags, options).handle_exception([this, name] (auto ep) {
         sstlog.error("Could not create SSTable component {}. Found exception: {}", name, ep);
         return make_exception_future<file>(ep);
+    }).then([this, f, name = std::move(name)] (file fd) mutable {
+        return rename_new_sstable_component_file(name, filename(f), std::move(fd));
     });
 }
 
 future<file> sstable::new_sstable_component_file_non_checked(component_type f, open_flags flags, file_open_options options) {
-    auto name = filename(f);
-    return open_sstable_component_file_non_checked(name, flags, options).handle_exception([name] (auto ep) {
+    auto create_flags = open_flags::create | open_flags::exclusive;
+    if ((flags & create_flags) != create_flags) {
+        return open_sstable_component_file_non_checked(filename(f), flags, options);
+    }
+    auto name = _temp_dir ? temp_filename(f) : filename(f);
+    return open_sstable_component_file_non_checked(name, flags, options).handle_exception([this, name] (auto ep) {
         sstlog.error("Could not create SSTable component {}. Found exception: {}", name, ep);
         return make_exception_future<file>(ep);
+    }).then([this, f, name = std::move(name)] (file fd) mutable {
+        return rename_new_sstable_component_file(name, filename(f), std::move(fd));
     });
 }
 
@@ -1045,6 +1066,7 @@ void sstable::generate_toc(compressor_ptr c, double filter_fp_chance) {
 }
 
 void sstable::write_toc(const io_priority_class& pc) {
+    touch_temp_dir().get0();
     auto file_path = filename(component_type::TemporaryTOC);
 
     sstlog.debug("Writing TOC file {} ", file_path);
@@ -1090,6 +1112,8 @@ void sstable::write_toc(const io_priority_class& pc) {
 future<> sstable::seal_sstable() {
     // SSTable sealing is about renaming temporary TOC file after guaranteeing
     // that each component reached the disk safely.
+  // FIXME: fix indentation
+  return remove_temp_dir().then([this] {
     return open_checked_directory(_write_error_handler, _dir).then([this] (file dir_f) {
         // Guarantee that every component of this sstable reached the disk.
         return sstable_write_io_check([&] { return dir_f.flush(); }).then([this] {
@@ -1107,6 +1131,7 @@ future<> sstable::seal_sstable() {
             sstlog.debug("SSTable with generation {} of {}.{} was sealed successfully.", _generation, _schema->ks_name(), _schema->cf_name());
         });
     });
+  });
 }
 
 void sstable::write_crc(const checksum& c) {
@@ -3723,8 +3748,29 @@ const bool sstable::has_component(component_type f) const {
     return _recognized_components.count(f);
 }
 
-const sstring sstable::filename(component_type f) const {
-    return filename(_dir, _schema->ks_name(), _schema->cf_name(), _version, _generation, _format, f);
+future<> sstable::touch_temp_dir() {
+    if (_temp_dir) {
+        return make_ready_future<>();
+    }
+    return do_with(get_temp_dir(), [this] (auto& temp_dir) {
+        sstlog.debug("Touching temp_dir={}", temp_dir);
+        return sstable_write_io_check(touch_directory, temp_dir).then([this, &temp_dir] {
+            _temp_dir = std::move(temp_dir);
+        });
+    });
+}
+
+future<> sstable::remove_temp_dir() {
+    if (!_temp_dir) {
+        return make_ready_future<>();
+    }
+    sstlog.debug("Removing temp_dir={}", _temp_dir);
+    return remove_file(*_temp_dir).handle_exception([this] (auto ep) {
+        sstlog.error("Could not remove temp dir {} to {}. Found exception: {}", _temp_dir, ep);
+        return make_exception_future<>(ep);
+    }).then([this] {
+        _temp_dir.reset();
+    });
 }
 
 std::vector<sstring> sstable::component_filenames() const {
@@ -3735,10 +3781,6 @@ std::vector<sstring> sstable::component_filenames() const {
         }
     }
     return res;
-}
-
-sstring sstable::toc_filename() const {
-    return filename(component_type::TOC);
 }
 
 bool sstable::is_staging() const {
