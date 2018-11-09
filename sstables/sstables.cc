@@ -3739,6 +3739,11 @@ const bool sstable::has_component(component_type f) const {
     return _recognized_components.count(f);
 }
 
+bool sstable::is_temp_dir(sstring dirpath) {
+    auto ext = boost::filesystem::canonical(std::string(dirpath)).extension().string();
+    return ext == "sstable";
+}
+
 future<> sstable::touch_temp_dir() {
     if (_temp_dir) {
         return make_ready_future<>();
@@ -3755,12 +3760,27 @@ future<> sstable::remove_temp_dir() {
     if (!_temp_dir) {
         return make_ready_future<>();
     }
-    sstlog.debug("Removing temp_dir={}", _temp_dir);
-    return remove_file(*_temp_dir).handle_exception([this] (auto ep) {
-        sstlog.error("Could not remove temp dir {} to {}. Found exception: {}", _temp_dir, ep);
-        return make_exception_future<>(ep);
-    }).then([this] {
+    return sstable::remove_temp_dir(*_temp_dir).then([this] {
         _temp_dir.reset();
+    });
+}
+
+future<> sstable::remove_temp_dir(sstring temp_dir) {
+    sstlog.debug("Removing temp_dir={}", temp_dir);
+    return remove_file(temp_dir).handle_exception([temp_dir = std::move(temp_dir)] (auto ep) {
+        sstlog.error("Could not remove temp dir {} to {}. Found exception: {}", temp_dir, ep);
+        return make_exception_future<>(ep);
+    });
+}
+
+future<> sstable::recursive_remove_temp_dir(sstring temp_dir) {
+    sstlog.debug("Recursively removing temp_dir={}", temp_dir);
+    return lister::scan_dir(temp_dir, { directory_entry_type::regular }, [] (lister::path sstdir, directory_entry de) {
+        auto name = to_sstring(sstdir.native()) + "/" + de.name;
+        sstlog.debug("Removing temp file {}", name);
+        return remove_file(name);
+    }).then([temp_dir = std::move(temp_dir)] {
+        return sstable::remove_temp_dir(temp_dir);
     });
 }
 
