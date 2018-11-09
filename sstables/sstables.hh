@@ -524,6 +524,7 @@ private:
     future<file> new_sstable_component_file_non_checked(component_type f, open_flags flags, file_open_options options = {});
 
     future<> touch_temp_dir();
+    future<> remove_temp_dir();
 
     void generate_toc(compressor_ptr c, double filter_fp_chance);
     void write_toc(const io_priority_class& pc);

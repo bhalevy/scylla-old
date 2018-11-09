@@ -1111,9 +1111,10 @@ void sstable::write_toc(const io_priority_class& pc) {
 }
 
 future<> sstable::seal_sstable() {
-    // FIXME: remove tmp sst directory
     // SSTable sealing is about renaming temporary TOC file after guaranteeing
     // that each component reached the disk safely.
+  // FIXME: fix indentation
+  return remove_temp_dir().then([this] {
     return open_checked_directory(_write_error_handler, _dir).then([this] (file dir_f) {
         // Guarantee that every component of this sstable reached the disk.
         return sstable_write_io_check([&] { return dir_f.flush(); }).then([this] {
@@ -1131,6 +1132,7 @@ future<> sstable::seal_sstable() {
             sstlog.debug("SSTable with generation {} of {}.{} was sealed successfully.", _generation, _schema->ks_name(), _schema->cf_name());
         });
     });
+  });
 }
 
 void sstable::write_crc(const checksum& c) {
@@ -3747,6 +3749,19 @@ future<> sstable::touch_temp_dir() {
         return sstable_write_io_check(touch_directory, temp_dir).then([this, &temp_dir] {
             _temp_dir = std::move(temp_dir);
         });
+    });
+}
+
+future<> sstable::remove_temp_dir() {
+    if (!_temp_dir) {
+        return make_ready_future<>();
+    }
+    sstlog.debug("Removing temp_dir={}", _temp_dir);
+    return remove_file(*_temp_dir).handle_exception([this] (auto ep) {
+        sstlog.error("Could not remove temp dir {} to {}. Found exception: {}", _temp_dir, ep);
+        return make_exception_future<>(ep);
+    }).then([this] {
+        _temp_dir.reset();
     });
 }
 
