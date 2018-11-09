@@ -3761,6 +3761,22 @@ const bool sstable::has_component(component_type f) const {
     return _recognized_components.count(f);
 }
 
+static inline fs::path canonical_path(sstring const& fname) {
+    return fs::canonical(fs::path(fname));
+}
+
+static inline sstring dirname(sstring const& fname) {
+    return canonical_path(fname).parent_path().string();
+}
+
+static inline sstring extension(sstring const& fname) {
+    return canonical_path(fname).extension().string();
+}
+
+bool sstable::is_temp_dir(sstring const& dirpath) {
+    return extension(dirpath) == "sstable";
+}
+
 future<> sstable::touch_temp_dir() {
     if (_temp_dir) {
         return make_ready_future<>();
@@ -3773,18 +3789,34 @@ future<> sstable::touch_temp_dir() {
     });
 }
 
+future<> sstable::remove_temp_dir(sstring const& temp_dir) {
+    sstlog.debug("Removing temp_dir={}", temp_dir);
+    return remove_file(temp_dir).then_wrapped([&temp_dir] (future<> f) {
+        if (f.failed()) {
+            sstlog.error("Could not remove temp dir {}. Found exception: {}", temp_dir, f.get_exception());
+        }
+        return f;
+    });
+}
+
 future<> sstable::remove_temp_dir() {
     if (!_temp_dir) {
         return make_ready_future<>();
     }
-    sstlog.debug("Removing temp_dir={}", _temp_dir);
-    return remove_file(*_temp_dir).then_wrapped([this] (future<> f) {
-        if (f.failed()) {
-            sstlog.error("Could not remove temp dir {}. Found exception: {}", _temp_dir, f.get_exception());
-        } else {
-            _temp_dir.reset();
-        }
-        return f;
+    return sstable::remove_temp_dir(*_temp_dir).then([this] {
+        _temp_dir.reset();
+        return make_ready_future<>();
+    });
+}
+
+future<> sstable::recursive_remove_temp_dir(sstring const& temp_dir) {
+    sstlog.debug("Recursively removing temp_dir={}", temp_dir);
+    return lister::scan_dir(temp_dir, { directory_entry_type::regular }, [] (lister::path sstdir, directory_entry de) {
+        auto name = to_sstring((sstdir / lister::path(de.name)).native());
+        sstlog.debug("Removing temp file {}", name);
+        return remove_file(name);
+    }).then([temp_dir = std::move(temp_dir)] {
+        return sstable::remove_temp_dir(temp_dir);
     });
 }
 
@@ -4152,10 +4184,6 @@ sstable::~sstable() {
         }
 
     }
-}
-
-static inline sstring dirname(sstring const& fname) {
-    return fs::canonical(fs::path(fname)).parent_path().string();
 }
 
 future<>

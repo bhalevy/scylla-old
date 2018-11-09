@@ -385,6 +385,10 @@ public:
         return dir + "/" + sst_dir_basename(gen);
     }
 
+    static bool is_temp_dir(sstring const& dirpath);
+    static future<> remove_temp_dir(sstring const& temp_dir);
+    static future<> recursive_remove_temp_dir(sstring const& temp_dir);
+
     const sstring& get_dir() const {
         return _dir;
     }
