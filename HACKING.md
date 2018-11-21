@@ -189,6 +189,14 @@ and must be started with
 $ ./scripts/scylla-jmx
 ```
 
+### Tools
+
+1. Build tools used to build and unit-test scylla like `install-dependencies.sh`, `configure.py`, and `test.py` are located at the root of the tree.
+
+2. Diagnostic and debugging tools like `scyllatop.py` and `scylla-gdb.py` are located under tools/.
+
+3. Other auxiliary and miscellaneous scripts are located under scripts/.
+
 ### Branches and tags
 
 Multiple release branches are maintained on the Git repository at https://github.com/scylladb/scylla. Release 1.5, for instance, is tracked on the `branch-1.5` branch.
