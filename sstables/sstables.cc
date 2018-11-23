@@ -33,6 +33,7 @@
 #include <seastar/core/shared_future.hh>
 #include <seastar/core/byteorder.hh>
 #include <iterator>
+#include <experimental/filesystem>
 
 #include "types.hh"
 #include "m_format_write_helpers.hh"
@@ -46,7 +47,6 @@
 #include "memtable.hh"
 #include "range.hh"
 #include "downsampling.hh"
-#include <boost/filesystem/operations.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/range/adaptor/map.hpp>
 #include <boost/range/adaptor/transformed.hpp>
@@ -74,6 +74,8 @@
 
 thread_local disk_error_signal_type sstable_read_error;
 thread_local disk_error_signal_type sstable_write_error;
+
+namespace fs = std::experimental::filesystem;
 
 namespace sstables {
 
@@ -4152,9 +4154,8 @@ sstable::~sstable() {
     }
 }
 
-sstring
-dirname(sstring fname) {
-    return boost::filesystem::canonical(std::string(fname)).parent_path().string();
+static inline sstring dirname(sstring const& fname) {
+    return fs::canonical(fs::path(fname)).parent_path().string();
 }
 
 future<>
