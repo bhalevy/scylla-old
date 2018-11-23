@@ -240,6 +240,12 @@ modes = {
         'opt': '-O3',
         'libs': '',
     },
+    'dev': {
+        'sanitize': '',
+        'sanitize_libs': '',
+        'opt': '-O1',
+        'libs': '',
+    },
 }
 
 scylla_tests = [
