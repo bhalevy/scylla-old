@@ -77,6 +77,10 @@ if __name__ == "__main__":
                 logging.error("No data directories found. Please check the configuration and run scylla_io_setup again.\n")
                 sys.exit(1)
 
+            commitlog_dir = cfg["commitlog_directory"]
+            if len(commitlog_dir) > 0:
+                data_dirs += [ commitlog_dir ]
+
             iotune_args = []
             for data_dir in data_dirs:
                 if os.path.exists(data_dir) == False:
