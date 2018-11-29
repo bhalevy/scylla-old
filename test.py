@@ -175,7 +175,7 @@ def alarm_handler(signum, frame):
 
 
 if __name__ == "__main__":
-    all_modes = ['debug', 'release']
+    all_modes = ['debug', 'release', 'dev']
 
     sysmem = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')
     testmem = 2e9
@@ -248,10 +248,10 @@ if __name__ == "__main__":
         exec_args = exec_args + '--collectd 0'.split()
         file = io.StringIO()
         if args.jenkins and type == 'boost':
-            mode = 'release'
-            if path.startswith(os.path.join('build', 'debug')):
-                mode = 'debug'
-            xmlout = (args.jenkins + "." + mode + "." + os.path.basename(path.split()[0]) + ".boost.xml")
+            for m in all_modes:
+                if test[0].startswith(os.path.join('build', m) + '/'):
+                    test_mode = m
+            xmlout = args.jenkins+"."+test_mode+"."+os.path.basename(test[0])+".boost.xml"
             boost_args += ['--report_level=no', '--logger=HRF,test_suite:XML,test_suite,' + xmlout]
         if type == 'boost':
             boost_args += ['--']
