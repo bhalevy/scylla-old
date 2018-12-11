@@ -1207,6 +1207,36 @@ void sstable::write_digest(uint32_t full_checksum) {
 thread_local std::array<std::vector<int>, downsampling::BASE_SAMPLING_LEVEL> downsampling::_sample_pattern_cache;
 thread_local std::array<std::vector<int>, downsampling::BASE_SAMPLING_LEVEL> downsampling::_original_index_cache;
 
+// Validate file ownership and mode (See #3117)
+// File must be either owned by the process uid
+// or have both read and write access to it.
+static bool valid_owner_and_mode(const struct stat& st)
+{
+    // file owned by user?
+    if (st.st_uid == geteuid()) {
+        return true;
+    }
+
+    bool is_grp = false;
+
+    // file owned by group?
+    if (st.st_gid == getegid()) {
+        is_grp = true;
+    } else {
+        // file owned by supplementary group?
+        gid_t grps[NGROUPS_MAX];
+        int ngrps = getgroups(NGROUPS_MAX, grps);
+        for (int i = 0; i < ngrps; i++) {
+            if (st.st_gid == grps[i]) {
+                is_grp = true;
+            }
+        }
+    }
+
+    // must have both read and write access
+    mode_t bits = is_grp ? (S_IRGRP | S_IWGRP) : (S_IROTH | S_IWOTH);
+    return (st.st_mode & bits) == bits;
+}
 
 template <component_type Type, typename T>
 future<> sstable::read_simple(T& component, const io_priority_class& pc) {
@@ -1214,8 +1244,12 @@ future<> sstable::read_simple(T& component, const io_priority_class& pc) {
     auto file_path = filename(Type);
     sstlog.debug(("Reading " + sstable_version_constants::get_component_map(_version).at(Type) + " file {} ").c_str(), file_path);
     return open_file_dma(file_path, open_flags::ro).then([this, &component] (file fi) {
-        auto fut = fi.size();
-        return fut.then([this, &component, fi = std::move(fi)] (uint64_t size) {
+        auto fut = fi.stat();
+        return fut.then([this, &component, fi = std::move(fi)] (struct stat st) {
+            if (!valid_owner_and_mode(st)) {
+                throw malformed_sstable_exception("Bad file owner and mode");
+            }
+            auto size = st.st_size;
             auto f = make_checked_file(_read_error_handler, fi);
             auto r = make_lw_shared<file_random_access_reader>(std::move(f), size, sstable_buffer_size);
             auto fut = parse(_version, *r, component);
