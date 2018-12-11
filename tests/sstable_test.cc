@@ -162,7 +162,9 @@ SEASTAR_TEST_CASE(missing_summary_first_last_sane) {
 
 static future<sstable_ptr> do_write_sst(schema_ptr schema, sstring load_dir, sstring write_dir, unsigned long generation) {
     auto sst = sstables::make_sstable(std::move(schema), load_dir, generation, la, big);
-    return sst->load().then([sst, write_dir, generation] {
+    return sst->load().then([sst] {
+        return sst->verify_components_linkability();
+    }).then([sst, write_dir, generation] {
         sstables::test(sst).change_generation_number(generation + 1);
         sstables::test(sst).change_dir(write_dir);
         auto fut = sstables::test(sst).store();

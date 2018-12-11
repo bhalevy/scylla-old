@@ -192,6 +192,7 @@ public:
     future<> load(const io_priority_class& pc = default_priority_class());
     future<> open_data();
     future<> update_info_for_opened_data();
+    future<> verify_components_linkability();
 
     future<> set_generation(int64_t generation);
     void move_to_new_dir_in_thread(sstring dir, int64_t generation);

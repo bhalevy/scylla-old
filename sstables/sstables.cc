@@ -1389,6 +1389,28 @@ future<> sstable::load(sstables::foreign_sstable_open_info info) {
     });
 }
 
+future<> sstable::verify_components_linkability() {
+    return read_toc().then([this] () {
+        return do_for_each(_recognized_components, [this] (component_type c) {
+            auto name = filename(c);
+            auto tmpname = name + ".tmp";
+            return do_with(std::move(name), std::move(tmpname), [] (auto& name, auto& tmpname) {
+                return file_exists(tmpname).then([&tmpname] (bool exists) {
+                    if (exists) {
+                        return remove_file(tmpname);
+                    } else {
+                        return make_ready_future<>();
+                    }
+                }).then([&name, &tmpname] {
+                    return link_file(name, tmpname).then([&tmpname] {
+                        remove_file(tmpname);
+                    });
+                });
+            });
+        });
+    });
+}
+
 future<sstable_open_info> sstable::load_shared_components(const schema_ptr& s, sstring dir, int generation, version_types v, format_types f,
         const io_priority_class& pc) {
     auto sst = sstables::make_sstable(s, dir, generation, v, f);

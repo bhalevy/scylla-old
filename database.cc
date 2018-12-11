@@ -816,7 +816,9 @@ table::open_sstable(sstables::foreign_sstable_open_info info, sstring dir, int64
         sst->set_unshared();
     }
     return sst->load(std::move(info)).then([sst] () mutable {
-        return make_ready_future<sstables::shared_sstable>(std::move(sst));
+        return sst->verify_components_linkability().then([sst] () mutable {
+            return make_ready_future<sstables::shared_sstable>(std::move(sst));
+        });
     });
 }
 
