@@ -952,13 +952,13 @@ private:
                 break;
             }
         case state::ROW_BODY_TIMESTAMP_TTL:
-            _liveness.set_ttl(parse_ttl(_header, uint32_t(_u64)));
+            _liveness.set_ttl(parse_ttl(_header, _u64, _sst->has_wide_local_deletion_time()));
             if (read_unsigned_vint(data) != read_status::ready) {
                 _state = state::ROW_BODY_TIMESTAMP_DELTIME;
                 break;
             }
         case state::ROW_BODY_TIMESTAMP_DELTIME:
-            _liveness.set_local_deletion_time(parse_expiry(_header, uint32_t(_u64)));
+            _liveness.set_local_deletion_time(parse_expiry(_header, _u64, _sst->has_wide_local_deletion_time()));
         case state::ROW_BODY_DELETION:
         row_body_deletion_label:
             if (!_flags.has_deletion()) {
@@ -976,7 +976,7 @@ private:
                 break;
             }
         case state::ROW_BODY_DELETION_3:
-            _row_tombstone.deletion_time = parse_expiry(_header, _u64);
+            _row_tombstone.deletion_time = parse_expiry(_header, _u64, _sst->has_wide_local_deletion_time());
         case state::ROW_BODY_SHADOWABLE_DELETION:
         row_body_shadowable_deletion_label:
             if (_extended_flags.has_scylla_shadowable_deletion()) {
@@ -998,7 +998,7 @@ private:
                 break;
             }
         case state::ROW_BODY_SHADOWABLE_DELETION_3:
-            _row_shadowable_tombstone.deletion_time = parse_expiry(_header, _u64);
+            _row_shadowable_tombstone.deletion_time = parse_expiry(_header, _u64, _sst->has_wide_local_deletion_time());
         case state::ROW_BODY_MARKER:
         row_body_marker_label:
             if (_consumer.consume_row_marker_and_tombstone(
@@ -1068,7 +1068,7 @@ private:
                 break;
             }
         case state::COLUMN_DELETION_TIME_2:
-            _column_local_deletion_time = parse_expiry(_header, _u64);
+            _column_local_deletion_time = parse_expiry(_header, _u64, _sst->has_wide_local_deletion_time());
         case state::COLUMN_TTL:
         column_ttl_label:
             if (_column_flags.use_row_ttl()) {
@@ -1085,7 +1085,7 @@ private:
                 break;
             }
         case state::COLUMN_TTL_2:
-            _column_ttl = parse_ttl(_header, _u64);
+            _column_ttl = parse_ttl(_header, _u64, _sst->has_wide_local_deletion_time());
         case state::COLUMN_CELL_PATH:
         column_cell_path_label:
             if (!is_column_simple()) {
@@ -1201,7 +1201,7 @@ private:
                 break;
             }
         case state::COMPLEX_COLUMN_LOCAL_DELETION_TIME:
-            _complex_column_tombstone = {_complex_column_marked_for_delete, parse_expiry(_header, _u64)};
+            _complex_column_tombstone = {_complex_column_marked_for_delete, parse_expiry(_header, _u64, _sst->has_wide_local_deletion_time())};
         case state::COMPLEX_COLUMN_2:
         complex_column_2_label:
             if (_consumer.consume_complex_column_start(get_column_info(), _complex_column_tombstone) == consumer_m::proceed::no) {
@@ -1277,7 +1277,7 @@ private:
                 break;
             }
         case state::RANGE_TOMBSTONE_BODY_LOCAL_DELTIME:
-            _left_range_tombstone.deletion_time = parse_expiry(_header, _u64);
+            _left_range_tombstone.deletion_time = parse_expiry(_header, _u64, _sst->has_wide_local_deletion_time());
             if (!is_boundary(_range_tombstone_kind)) {
                 if (_consumer.consume_range_tombstone(_row_key,
                                                       to_bound_kind(_range_tombstone_kind),
@@ -1300,7 +1300,7 @@ private:
                 break;
             }
         case state::RANGE_TOMBSTONE_BODY_LOCAL_DELTIME2:
-            _right_range_tombstone.deletion_time = parse_expiry(_header, _u64);
+            _right_range_tombstone.deletion_time = parse_expiry(_header, _u64, _sst->has_wide_local_deletion_time());
             if (_consumer.consume_range_tombstone(_row_key,
                                                   _range_tombstone_kind,
                                                   _left_range_tombstone,
