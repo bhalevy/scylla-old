@@ -318,7 +318,7 @@ public:
                 .template serialize_as_nested<tags::atomic_cell>()
                     .serialize(ts)
                     .skip()
-                    .template serialize_as<tags::dead>(deletion_time.time_since_epoch().count())
+                    .template serialize_as<tags::dead>(gc_clock::as_int32(deletion_time))
                     .done()
                 .done();
         };
@@ -382,8 +382,8 @@ public:
                 .template serialize_as_nested<tags::atomic_cell>()
                     .serialize(ts)
                     .serialize_nested()
-                        .serialize(ttl.count())
-                        .serialize(expiry.time_since_epoch().count())
+                        .serialize(gc_clock::as_int32(ttl))
+                        .serialize(gc_clock::as_int32(expiry))
                         .done();
             return [&] {
                 if (ti.is_fixed_size()) {

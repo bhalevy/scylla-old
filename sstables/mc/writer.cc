@@ -325,7 +325,7 @@ template <typename W>
 GCC6_CONCEPT(requires Writer<W>())
 void write_delta_ttl(W& out, gc_clock::duration ttl, const encoding_stats& enc_stats) {
     int32_t _min_ttl = enc_stats.min_ttl;
-    int32_t _ttl = ttl.count();
+    int32_t _ttl = gc_clock::as_int32(ttl);
     if (!is_expired_liveness_ttl(_ttl) && _ttl < _min_ttl) {
         slogger.error("write_delta_ttl: ttl={} min_ttl={}", _ttl, _min_ttl);
         assert(is_expired_liveness_ttl(_ttl) || _ttl >= _min_ttl);
@@ -337,7 +337,7 @@ template <typename W>
 GCC6_CONCEPT(requires Writer<W>())
 void write_delta_local_deletion_time(W& out, gc_clock::time_point ldt, const encoding_stats& enc_stats) {
     int32_t _min_ldt = enc_stats.min_local_deletion_time;
-    int32_t _ldt = ldt.time_since_epoch().count();
+    int32_t _ldt = gc_clock::as_int32(ldt);
     if (_ldt < _min_ldt) {
         slogger.error("write_delta_local_deletion_time: local_deletion_time={} min_local_deletion_time={}", _ldt, _min_ldt);
         assert(_ldt >= _min_ldt);
@@ -745,7 +745,7 @@ void writer::maybe_set_pi_first_clustering(const writer::clustering_info& info) 
 static deletion_time to_deletion_time(tombstone t) {
     deletion_time dt;
     if (t) {
-        dt.local_deletion_time = t.deletion_time.time_since_epoch().count();
+        dt.local_deletion_time = gc_clock::as_int32(t.deletion_time);
         dt.marked_for_delete_at = t.timestamp;
     } else {
         // Default values for live, non-deleted rows.
@@ -928,8 +928,8 @@ void writer::write_cell(bytes_ostream& writer, atomic_cell_view cell, const colu
     bool is_row_expiring = properties.ttl.has_value();
     bool is_cell_expiring = cell.is_live_and_has_ttl();
     bool use_row_ttl = is_row_expiring && is_cell_expiring &&
-                       properties.ttl == cell.ttl().count() &&
-                       properties.local_deletion_time == cell.deletion_time().time_since_epoch().count();
+                       properties.ttl == gc_clock::as_int32(cell.ttl()) &&
+                       properties.local_deletion_time == gc_clock::as_int32(cell.deletion_time());
 
     cell_flags flags = cell_flags::none;
     if (!has_value) {
@@ -982,20 +982,17 @@ void writer::write_cell(bytes_ostream& writer, atomic_cell_view cell, const colu
     // Collect cell statistics
     _c_stats.update_timestamp(cell.timestamp());
     if (is_deleted) {
-        auto ldt = cell.deletion_time().time_since_epoch().count();
-        _c_stats.update_local_deletion_time_and_timestamp_histogram(ldt);
+        _c_stats.update_local_deletion_time_and_timestamp_histogram(cell.deletion_time());
         _sst.get_stats().on_cell_tombstone_write();
         return;
     }
 
     if (is_cell_expiring) {
-        auto expiration = cell.expiry().time_since_epoch().count();
-        auto ttl = cell.ttl().count();
-        _c_stats.update_ttl(ttl);
+        _c_stats.update_ttl(cell.ttl());
         // tombstone histogram is updated with expiration time because if ttl is longer
         // than gc_grace_seconds for all data, sstable will be considered fully expired
         // when actually nothing is expired.
-        _c_stats.update_local_deletion_time_and_timestamp_histogram(expiration);
+        _c_stats.update_local_deletion_time_and_timestamp_histogram(cell.expiry());
     } else { // regular live cell
         _c_stats.update_local_deletion_time(std::numeric_limits<int>::max());
     }
@@ -1012,8 +1009,8 @@ void writer::write_liveness_info(bytes_ostream& writer, const row_marker& marker
     write_delta_timestamp(writer, timestamp);
 
     auto write_expiring_liveness_info = [this, &writer] (gc_clock::duration ttl, gc_clock::time_point ldt) {
-        _c_stats.update_ttl(ttl.count());
-        _c_stats.update_local_deletion_time_and_timestamp_histogram(ldt.time_since_epoch().count());
+        _c_stats.update_ttl(ttl);
+        _c_stats.update_local_deletion_time_and_timestamp_histogram(ldt);
         write_delta_ttl(writer, ttl);
         write_delta_local_deletion_time(writer, ldt);
     };
@@ -1089,8 +1086,8 @@ void writer::write_row_body(bytes_ostream& writer, const clustering_row& row, bo
     if (!row.marker().is_missing()) {
         properties.timestamp = row.marker().timestamp();
         if (row.marker().is_expiring()) {
-            properties.ttl = row.marker().ttl().count();
-            properties.local_deletion_time = row.marker().deletion_time().time_since_epoch().count();
+            properties.ttl = gc_clock::as_int32(row.marker().ttl());
+            properties.local_deletion_time = gc_clock::as_int32(row.marker().deletion_time());
         }
     }
 
