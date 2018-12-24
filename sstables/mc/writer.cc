@@ -34,6 +34,8 @@
 #include <boost/iterator/iterator_facade.hpp>
 #include <boost/container/static_vector.hpp>
 
+logging::logger slogger("mc_writer");
+
 namespace sstables {
 namespace mc {
 
@@ -322,15 +324,25 @@ void write_delta_timestamp(W& out, api::timestamp_type timestamp, const encoding
 template <typename W>
 GCC6_CONCEPT(requires Writer<W>())
 void write_delta_ttl(W& out, gc_clock::duration ttl, const encoding_stats& enc_stats) {
-    uint32_t _ttl = static_cast<uint32_t>(ttl.count());
-    write_unsigned_delta_vint(out, _ttl, static_cast<uint32_t>(enc_stats.min_ttl));
+    int32_t _min_ttl = enc_stats.min_ttl;
+    int32_t _ttl = ttl.count();
+    if (!is_expired_liveness_ttl(_ttl) && _ttl < _min_ttl) {
+        slogger.error("write_delta_ttl: ttl={} min_ttl={}", _ttl, _min_ttl);
+        assert(is_expired_liveness_ttl(_ttl) || _ttl >= _min_ttl);
+    }
+    write_unsigned_delta_vint(out, _ttl, _min_ttl);
 }
 
 template <typename W>
 GCC6_CONCEPT(requires Writer<W>())
 void write_delta_local_deletion_time(W& out, gc_clock::time_point ldt, const encoding_stats& enc_stats) {
-    uint32_t _ldt = static_cast<uint32_t>(ldt.time_since_epoch().count());
-    write_unsigned_delta_vint(out, _ldt, static_cast<uint32_t>(enc_stats.min_local_deletion_time));
+    int32_t _min_ldt = enc_stats.min_local_deletion_time;
+    int32_t _ldt = ldt.time_since_epoch().count();
+    if (_ldt < _min_ldt) {
+        slogger.error("write_delta_local_deletion_time: local_deletion_time={} min_local_deletion_time={}", _ldt, _min_ldt);
+        assert(_ldt >= _min_ldt);
+    }
+    write_unsigned_delta_vint(out, _ldt, _min_ldt);
 }
 
 static bytes_array_vint_size to_bytes_array_vint_size(bytes b) {
