@@ -322,13 +322,13 @@ void write_delta_timestamp(W& out, api::timestamp_type timestamp, const encoding
 template <typename W>
 GCC6_CONCEPT(requires Writer<W>())
 void write_delta_ttl(W& out, uint32_t ttl, const encoding_stats& enc_stats) {
-    write_unsigned_delta_vint(out, ttl, enc_stats.min_ttl);
+    write_unsigned_delta_vint(out, ttl, static_cast<uint32_t>(enc_stats.min_ttl));
 }
 
 template <typename W>
 GCC6_CONCEPT(requires Writer<W>())
 void write_delta_local_deletion_time(W& out, uint32_t local_deletion_time, const encoding_stats& enc_stats) {
-    write_unsigned_delta_vint(out, local_deletion_time, enc_stats.min_local_deletion_time);
+    write_unsigned_delta_vint(out, local_deletion_time, static_cast<uint32_t>(enc_stats.min_local_deletion_time));
 }
 
 template <typename W>
@@ -364,6 +364,7 @@ static sstring pk_type_to_string(const schema& s) {
 
 serialization_header make_serialization_header(const schema& s, const encoding_stats& enc_stats) {
     serialization_header header;
+    // mc serialization header minimum values are delta-encoded based on the default timestamp epoch times
     header.min_timestamp_base.value = static_cast<uint64_t>(enc_stats.min_timestamp) - encoding_stats::timestamp_epoch;
     header.min_local_deletion_time_base.value = enc_stats.min_local_deletion_time - encoding_stats::deletion_time_epoch;
     header.min_ttl_base.value = enc_stats.min_ttl - encoding_stats::ttl_epoch;
