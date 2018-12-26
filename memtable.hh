@@ -145,8 +145,8 @@ private:
     class encoding_stats_collector {
     private:
         min_max_tracker<api::timestamp_type> timestamp;
-        min_tracker<uint32_t> min_local_deletion_time;
-        min_tracker<uint32_t> min_ttl;
+        min_tracker<int32_t> min_local_deletion_time;
+        min_tracker<int32_t> min_ttl;
 
         void update_timestamp(api::timestamp_type ts) {
             if (ts != api::missing_timestamp) {
@@ -156,9 +156,9 @@ private:
 
     public:
         encoding_stats_collector()
-            : timestamp(encoding_stats::timestamp_epoch, 0)
-            , min_local_deletion_time(encoding_stats::deletion_time_epoch)
-            , min_ttl(encoding_stats::ttl_epoch)
+            : timestamp(api::max_timestamp, 0)
+            , min_local_deletion_time(std::numeric_limits<int32_t>::max())
+            , min_ttl(max_ttl.count())
         {}
 
         void update(atomic_cell_view cell) {
