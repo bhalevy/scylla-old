@@ -213,6 +213,7 @@ public:
         if (!ttl) {
             return make_live(type, timestamp, value, cm);
         } else {
+            assert(*ttl >= gc_clock::duration::zero() && *ttl <= max_ttl);
             return make_live(type, timestamp, value, gc_clock::now() + *ttl, *ttl, cm);
         }
     }
