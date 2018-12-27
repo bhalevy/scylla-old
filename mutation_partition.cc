@@ -999,6 +999,8 @@ int compare_row_marker_for_merge(const row_marker& left, const row_marker& right
         if (left.is_expiring() && left.expiry() != right.expiry()) {
             return left.expiry() < right.expiry() ? -1 : 1;
         }
+    } else if (left.is_missing()) {
+        return 1;
     } else {
         // Both are deleted
         if (left.deletion_time() != right.deletion_time()) {
