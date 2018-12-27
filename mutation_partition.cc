@@ -984,6 +984,9 @@ operator<<(std::ostream& os, const mutation_partition::printer& p) {
 constexpr gc_clock::duration row_marker::no_ttl;
 constexpr gc_clock::duration row_marker::dead;
 
+// row_markers are ordered by:
+//     missing < !missing (by timestamp)
+//     live < expiring (by expiry time) < dead (by deletion time)
 int compare_row_marker_for_merge(const row_marker& left, const row_marker& right) noexcept {
     if (left.timestamp() != right.timestamp()) {
         return left.timestamp() > right.timestamp() ? 1 : -1;
@@ -999,7 +1002,7 @@ int compare_row_marker_for_merge(const row_marker& left, const row_marker& right
         if (left.is_expiring() && left.expiry() != right.expiry()) {
             return left.expiry() < right.expiry() ? -1 : 1;
         }
-    } else {
+    } else if (!left.is_missing()) {
         // Both are deleted
         if (left.deletion_time() != right.deletion_time()) {
             // Origin compares big-endian serialized deletion time. That's because it
