@@ -311,7 +311,7 @@ template <typename T, typename W>
 GCC6_CONCEPT(requires Writer<W>())
 void write_unsigned_delta_vint(W& out, T value, T base) {
     using unsigned_type = std::make_unsigned_t<T>;
-    unsigned_type delta = static_cast<unsigned_type>(value) - base;
+    unsigned_type delta = static_cast<unsigned_type>(value) - static_cast<unsigned_type>(base);
     write_vint(out, delta);
 }
 
@@ -324,11 +324,11 @@ void write_delta_timestamp(W& out, api::timestamp_type timestamp, const encoding
 template <typename W>
 GCC6_CONCEPT(requires Writer<W>())
 void write_delta_ttl(W& out, gc_clock::duration ttl, const encoding_stats& enc_stats) {
-    int32_t _min_ttl = enc_stats.min_ttl;
+    int32_t _min_ttl = gc_clock::as_int32(enc_stats.min_ttl);
     int32_t _ttl = gc_clock::as_int32(ttl);
-    if (!is_expired_liveness_ttl(_ttl) && _ttl < _min_ttl) {
+    if (!is_expired_liveness_ttl(ttl) && _ttl < _min_ttl) {
         slogger.error("write_delta_ttl: ttl={} min_ttl={}", _ttl, _min_ttl);
-        assert(is_expired_liveness_ttl(_ttl) || _ttl >= _min_ttl);
+        assert(is_expired_liveness_ttl(ttl) || _ttl >= _min_ttl);
     }
     write_unsigned_delta_vint(out, _ttl, _min_ttl);
 }
@@ -336,7 +336,7 @@ void write_delta_ttl(W& out, gc_clock::duration ttl, const encoding_stats& enc_s
 template <typename W>
 GCC6_CONCEPT(requires Writer<W>())
 void write_delta_local_deletion_time(W& out, gc_clock::time_point ldt, const encoding_stats& enc_stats) {
-    int32_t _min_ldt = enc_stats.min_local_deletion_time;
+    int32_t _min_ldt = gc_clock::as_int32(enc_stats.min_local_deletion_time);
     int32_t _ldt = gc_clock::as_int32(ldt);
     if (_ldt < _min_ldt) {
         slogger.error("write_delta_local_deletion_time: local_deletion_time={} min_local_deletion_time={}", _ldt, _min_ldt);
@@ -373,8 +373,8 @@ serialization_header make_serialization_header(const schema& s, const encoding_s
     serialization_header header;
     // mc serialization header minimum values are delta-encoded based on the default timestamp epoch times
     header.min_timestamp_base.value = static_cast<uint64_t>(enc_stats.min_timestamp) - encoding_stats::timestamp_epoch;
-    header.min_local_deletion_time_base.value = enc_stats.min_local_deletion_time - encoding_stats::deletion_time_epoch;
-    header.min_ttl_base.value = enc_stats.min_ttl - encoding_stats::ttl_epoch;
+    header.min_local_deletion_time_base.value = static_cast<uint32_t>(enc_stats.min_local_deletion_time.time_since_epoch().count()) - encoding_stats::deletion_time_epoch;
+    header.min_ttl_base.value = static_cast<uint32_t>(enc_stats.min_ttl.count()) - encoding_stats::ttl_epoch;
 
     header.pk_type_name = to_bytes_array_vint_size(pk_type_to_string(s));
 
@@ -632,8 +632,8 @@ private:
 
     struct row_time_properties {
         std::optional<api::timestamp_type> timestamp;
-        std::optional<uint32_t> ttl;
-        std::optional<uint32_t> local_deletion_time;
+        std::optional<gc_clock::duration> ttl;
+        std::optional<gc_clock::time_point> local_deletion_time;
     };
 
     // Writes single atomic cell
@@ -928,8 +928,8 @@ void writer::write_cell(bytes_ostream& writer, atomic_cell_view cell, const colu
     bool is_row_expiring = properties.ttl.has_value();
     bool is_cell_expiring = cell.is_live_and_has_ttl();
     bool use_row_ttl = is_row_expiring && is_cell_expiring &&
-                       properties.ttl == gc_clock::as_int32(cell.ttl()) &&
-                       properties.local_deletion_time == gc_clock::as_int32(cell.deletion_time());
+                       properties.ttl == cell.ttl() &&
+                       properties.local_deletion_time == cell.deletion_time();
 
     cell_flags flags = cell_flags::none;
     if (!has_value) {
@@ -1086,8 +1086,8 @@ void writer::write_row_body(bytes_ostream& writer, const clustering_row& row, bo
     if (!row.marker().is_missing()) {
         properties.timestamp = row.marker().timestamp();
         if (row.marker().is_expiring()) {
-            properties.ttl = gc_clock::as_int32(row.marker().ttl());
-            properties.local_deletion_time = gc_clock::as_int32(row.marker().deletion_time());
+            properties.ttl = row.marker().ttl();
+            properties.local_deletion_time = row.marker().deletion_time();
         }
     }
 

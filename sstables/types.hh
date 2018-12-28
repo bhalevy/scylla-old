@@ -415,12 +415,14 @@ struct serialization_header : public metadata_base<serialization_header> {
         return static_cast<api::timestamp_type>(min_timestamp_base.value + encoding_stats::timestamp_epoch);
     }
 
-    int32_t get_min_ttl() const {
-        return static_cast<int32_t>(min_ttl_base.value + encoding_stats::ttl_epoch);
+    gc_clock::duration get_min_ttl() const {
+        uint32_t min_ttl = min_ttl_base.value + encoding_stats::ttl_epoch;
+        return gc_clock::duration(min_ttl);
     }
 
-    int32_t get_min_local_deletion_time() const {
-        return static_cast<int32_t>(min_local_deletion_time_base.value + encoding_stats::deletion_time_epoch);
+    gc_clock::time_point get_min_local_deletion_time() const {
+        uint32_t min_local_deletion_time = min_local_deletion_time_base.value + encoding_stats::deletion_time_epoch;
+        return gc_clock::time_point(gc_clock::duration(min_local_deletion_time));
     }
 };
 
@@ -567,6 +569,10 @@ constexpr static int32_t expired_liveness_ttl = -1;
 
 inline bool is_expired_liveness_ttl(int32_t ttl) {
     return ttl == expired_liveness_ttl;
+}
+
+inline bool is_expired_liveness_ttl(gc_clock::duration ttl) {
+    return is_expired_liveness_ttl(ttl.count());
 }
 
 struct statistics {

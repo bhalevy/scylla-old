@@ -145,8 +145,8 @@ private:
     class encoding_stats_collector {
     private:
         min_max_tracker<api::timestamp_type> timestamp;
-        min_tracker<int32_t> min_local_deletion_time;
-        min_tracker<int32_t> min_ttl;
+        min_tracker<gc_clock::time_point> min_local_deletion_time;
+        min_tracker<gc_clock::duration> min_ttl;
 
         void update_timestamp(api::timestamp_type ts) {
             if (ts != api::missing_timestamp) {
@@ -157,23 +157,23 @@ private:
     public:
         encoding_stats_collector()
             : timestamp(api::max_timestamp, 0)
-            , min_local_deletion_time(std::numeric_limits<int32_t>::max())
-            , min_ttl(std::numeric_limits<int32_t>::max())
+            , min_local_deletion_time(gc_clock::time_point::max())
+            , min_ttl(gc_clock::duration::max())
         {}
 
         void update(atomic_cell_view cell) {
             update_timestamp(cell.timestamp());
             if (cell.is_live_and_has_ttl()) {
-                min_ttl.update(cell.ttl().count());
-                min_local_deletion_time.update(cell.expiry().time_since_epoch().count());
+                min_ttl.update(cell.ttl());
+                min_local_deletion_time.update(cell.expiry());
             } else if (!cell.is_live()) {
-                min_local_deletion_time.update(cell.deletion_time().time_since_epoch().count());
+                min_local_deletion_time.update(cell.deletion_time());
             }
         }
 
         void do_update(tombstone tomb) {
             update_timestamp(tomb.timestamp);
-            min_local_deletion_time.update(tomb.deletion_time.time_since_epoch().count());
+            min_local_deletion_time.update(tomb.deletion_time);
         }
 
         void update(tombstone tomb) {
@@ -221,10 +221,10 @@ private:
             update_timestamp(marker.timestamp());
             if (!marker.is_missing()) {
                 if (!marker.is_live()) {
-                    min_local_deletion_time.update(marker.deletion_time().time_since_epoch().count());
+                    min_local_deletion_time.update(marker.deletion_time());
                 } else if (marker.is_expiring()) {
-                    min_ttl.update(marker.ttl().count());
-                    min_local_deletion_time.update(marker.expiry().time_since_epoch().count());
+                    min_ttl.update(marker.ttl());
+                    min_local_deletion_time.update(marker.expiry());
                 }
             }
         }
