@@ -2392,8 +2392,8 @@ encoding_stats sstable::get_encoding_stats() const {
     encoding_stats stats;
 
     stats.min_timestamp = serialization_header.get_min_timestamp();
-    stats.min_local_deletion_time = serialization_header.get_min_local_deletion_time();
-    stats.min_ttl = serialization_header.get_min_ttl();
+    stats.min_local_deletion_time = gc_clock::time_point(gc_clock::duration(serialization_header.get_min_local_deletion_time()));
+    stats.min_ttl = gc_clock::duration(serialization_header.get_min_ttl());
 
     return stats;
 }

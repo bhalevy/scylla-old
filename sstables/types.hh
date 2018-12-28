@@ -570,6 +570,10 @@ inline bool is_expired_liveness_ttl(int32_t ttl) {
     return ttl == expired_liveness_ttl;
 }
 
+inline bool is_expired_liveness_ttl(gc_clock::duration ttl) {
+    return is_expired_liveness_ttl(ttl.count());
+}
+
 struct statistics {
     disk_array<uint32_t, std::pair<metadata_type, uint32_t>> offsets; // ordered by metadata_type
     std::unordered_map<metadata_type, std::unique_ptr<metadata>> contents;
