@@ -905,9 +905,7 @@ void writer::consume(tombstone t) {
     auto dt = to_deletion_time(t);
     write(_sst.get_version(), *_data_writer, dt);
     _partition_header_length += (_data_writer->offset() - current_pos);
-    if (t) {
-        _c_stats.update(dt);
-    }
+    _c_stats.update(t);
 
     _pi_write_m.tomb = t;
     _tombstone_written = true;
@@ -1029,9 +1027,7 @@ void writer::write_collection(bytes_ostream& writer, const column_definition& cd
         if (has_complex_deletion) {
             auto dt = to_deletion_time(mview.tomb);
             write_delta_deletion_time(writer, dt);
-            if (mview.tomb) {
-                _c_stats.update(dt);
-            }
+            _c_stats.update(mview.tomb);
         }
 
         write_vint(writer, mview.cells.size());
@@ -1074,7 +1070,7 @@ void writer::write_row_body(bytes_ostream& writer, const clustering_row& row, bo
     write_liveness_info(writer, row.marker());
     auto write_tombstone_and_update_stats = [this, &writer] (const tombstone& t) {
         auto dt = to_deletion_time(t);
-        _c_stats.update(dt);
+        _c_stats.do_update(t);
         write_delta_deletion_time(writer, dt);
     };
     if (row.tomb().regular()) {
@@ -1263,11 +1259,11 @@ void writer::write_clustered(const rt_marker& marker, uint64_t prev_row_size) {
     auto write_marker_body = [this, &marker] (bytes_ostream& writer) {
         auto dt = to_deletion_time(marker.tomb);
         write_delta_deletion_time(writer, dt);
-        _c_stats.update(dt);
+        _c_stats.update(marker.tomb);
         if (marker.boundary_tomb) {
             auto dt_boundary = to_deletion_time(*marker.boundary_tomb);
             write_delta_deletion_time(writer, dt_boundary);
-            _c_stats.update(dt_boundary);
+            _c_stats.do_update(*marker.boundary_tomb);
         }
     };
 
