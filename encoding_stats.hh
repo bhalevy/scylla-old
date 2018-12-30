@@ -46,6 +46,6 @@ struct encoding_stats {
     static constexpr int32_t ttl_epoch = 0;
 
     api::timestamp_type min_timestamp = timestamp_epoch;
-    int32_t min_local_deletion_time = deletion_time_epoch;
-    int32_t min_ttl = ttl_epoch;
+    int32_t min_local_deletion_time = 0;  // accommodate for missing tombstone deletion_time
+    int32_t min_ttl = -1;                 // accommodate for expired_liveness_ttl
 };
