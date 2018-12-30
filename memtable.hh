@@ -171,15 +171,22 @@ private:
             }
         }
 
+        void do_update(tombstone tomb) {
+            update_timestamp(tomb.timestamp);
+            min_local_deletion_time.update(tomb.deletion_time.time_since_epoch().count());
+        }
+
         void update(tombstone tomb) {
             if (tomb) {
-                update_timestamp(tomb.timestamp);
-                min_local_deletion_time.update(tomb.deletion_time.time_since_epoch().count());
+                do_update(tomb);
             }
         }
 
         void update(const schema& s, const row& r, column_kind kind) {
-            r.for_each_cell([this, &s, kind](column_id id, const atomic_cell_or_collection& item) {
+            bool has_deleted_collections = false;
+            bool has_live_collections = false;
+            r.for_each_cell([this, &s, kind, &has_deleted_collections, &has_live_collections]
+                             (column_id id, const atomic_cell_or_collection& item) {
                 auto& col = s.column_at(kind, id);
                 if (col.is_atomic()) {
                     update(item.as_atomic_cell(col));
@@ -187,13 +194,23 @@ private:
                     auto ctype = static_pointer_cast<const collection_type_impl>(col.type);
                   item.as_collection_mutation().data.with_linearized([&] (bytes_view bv) {
                     auto mview = ctype->deserialize_mutation_form(bv);
-                    update(mview.tomb);
+                    if (mview.tomb) {
+                        do_update(mview.tomb);
+                        has_deleted_collections = true;
+                    } else {
+                        has_live_collections = true;
+                    }
                     for (auto& entry : mview.cells) {
                         update(entry.second);
                     }
                   });
                 }
             });
+            if (has_deleted_collections && has_live_collections) {
+                // because writer::write_collection has to encode these too
+                // when the row has_complex_deletion
+                do_update(tombstone());
+            }
         }
 
         void update(const range_tombstone& rt) {
