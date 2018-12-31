@@ -324,8 +324,8 @@ void write_delta_timestamp(W& out, api::timestamp_type timestamp, const encoding
 template <typename W>
 GCC6_CONCEPT(requires Writer<W>())
 void write_delta_ttl(W& out, gc_clock::duration ttl, const encoding_stats& enc_stats) {
-    int32_t _min_ttl = gc_clock::as_int32(enc_stats.min_ttl);
-    int32_t _ttl = gc_clock::as_int32(ttl);
+    int64_t _min_ttl = enc_stats.min_ttl.count();
+    int64_t _ttl = ttl.count();
     if (_ttl < _min_ttl) {
         slogger.error("write_delta_ttl: ttl={} min_ttl={}", _ttl, _min_ttl);
         assert(_ttl >= _min_ttl);
@@ -336,8 +336,8 @@ void write_delta_ttl(W& out, gc_clock::duration ttl, const encoding_stats& enc_s
 template <typename W>
 GCC6_CONCEPT(requires Writer<W>())
 void write_delta_local_deletion_time(W& out, gc_clock::time_point ldt, const encoding_stats& enc_stats) {
-    int32_t _min_ldt = gc_clock::as_int32(enc_stats.min_local_deletion_time);
-    int32_t _ldt = gc_clock::as_int32(ldt);
+    int64_t _min_ldt = enc_stats.min_local_deletion_time.time_since_epoch().count();
+    int64_t _ldt = ldt.time_since_epoch().count();
     if (_ldt < _min_ldt) {
         slogger.error("write_delta_local_deletion_time: local_deletion_time={} min_local_deletion_time={}", _ldt, _min_ldt);
         assert(_ldt >= _min_ldt);
@@ -373,8 +373,8 @@ serialization_header make_serialization_header(const schema& s, const encoding_s
     serialization_header header;
     // mc serialization header minimum values are delta-encoded based on the default timestamp epoch times
     header.min_timestamp_base.value = static_cast<uint64_t>(enc_stats.min_timestamp) - encoding_stats::timestamp_epoch;
-    header.min_local_deletion_time_base.value = static_cast<uint32_t>(enc_stats.min_local_deletion_time.time_since_epoch().count()) - encoding_stats::deletion_time_epoch;
-    header.min_ttl_base.value = static_cast<uint32_t>(enc_stats.min_ttl.count()) - encoding_stats::ttl_epoch;
+    header.min_local_deletion_time_base.value = static_cast<uint64_t>(enc_stats.min_local_deletion_time.time_since_epoch().count()) - encoding_stats::deletion_time_epoch;
+    header.min_ttl_base.value = static_cast<uint64_t>(enc_stats.min_ttl.count()) - encoding_stats::ttl_epoch;
 
     header.pk_type_name = to_bytes_array_vint_size(pk_type_to_string(s));
 

@@ -39,6 +39,7 @@
 #include "version.hh"
 #include "encoding_stats.hh"
 #include "utils/UUID.hh"
+#include "exceptions.hh"
 
 // While the sstable code works with char, bytes_view works with int8_t
 // (signed char). Rather than change all the code, let's do a cast.
@@ -371,8 +372,8 @@ using bytes_array_vint_size = disk_string_vint_size;
 
 struct serialization_header : public metadata_base<serialization_header> {
     vint<uint64_t> min_timestamp_base;
-    vint<uint32_t> min_local_deletion_time_base;
-    vint<uint32_t> min_ttl_base;
+    vint<uint64_t> min_local_deletion_time_base;
+    vint<uint64_t> min_ttl_base;
     bytes_array_vint_size pk_type_name;
     disk_array_vint_size<bytes_array_vint_size> clustering_key_types_names;
     struct column_desc {
@@ -415,12 +416,24 @@ struct serialization_header : public metadata_base<serialization_header> {
         return static_cast<api::timestamp_type>(min_timestamp_base.value + encoding_stats::timestamp_epoch);
     }
 
-    int32_t get_min_ttl() const {
-        return static_cast<int32_t>(min_ttl_base.value) + encoding_stats::ttl_epoch;
+    int64_t get_min_ttl(bool wide_local_deletion_time) const {
+        if (!wide_local_deletion_time) {
+            if (min_ttl_base.value > std::numeric_limits<uint32_t>::max()) {
+                throw malformed_sstable_exception(format("serialization_header min_ttl is too big: {}", min_ttl_base.value));
+            }
+            return static_cast<int32_t>(min_ttl_base.value) + encoding_stats::ttl_epoch;
+        }
+        return static_cast<int64_t>(min_ttl_base.value) + encoding_stats::ttl_epoch;
     }
 
-    int32_t get_min_local_deletion_time() const {
-        return static_cast<int32_t>(min_local_deletion_time_base.value) + encoding_stats::deletion_time_epoch;
+    int64_t get_min_local_deletion_time(bool wide_local_deletion_time) const {
+        if (!wide_local_deletion_time) {
+            if (min_local_deletion_time_base.value > std::numeric_limits<uint32_t>::max()) {
+                throw malformed_sstable_exception(format("serialization_header min_local_deletion_time is too big: {}", min_local_deletion_time_base.value));
+            }
+            return static_cast<int32_t>(min_local_deletion_time_base.value) + encoding_stats::deletion_time_epoch;
+        }
+        return static_cast<int64_t>(min_local_deletion_time_base.value) + encoding_stats::deletion_time_epoch;
     }
 };
 
@@ -564,9 +577,9 @@ struct hash<sstables::metadata_type> : enum_hash<sstables::metadata_type> {};
 namespace sstables {
 
 // Special value to represent expired (i.e., 'dead') liveness info
-constexpr static int32_t expired_liveness_ttl = -1;
+constexpr static int64_t expired_liveness_ttl = -1;
 
-inline bool is_expired_liveness_ttl(int32_t ttl) {
+inline bool is_expired_liveness_ttl(int64_t ttl) {
     return ttl == expired_liveness_ttl;
 }
 

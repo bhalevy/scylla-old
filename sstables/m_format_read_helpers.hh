@@ -65,12 +65,19 @@ inline api::timestamp_type parse_timestamp(const serialization_header& header,
 
 inline gc_clock::duration parse_ttl(const serialization_header& header,
                                     uint64_t delta, bool wide_local_deletion_time) {
-    if (delta > std::numeric_limits<uint32_t>::max()) {
-        throw malformed_sstable_exception(format("Too big delta ttl: {}", delta));
-    }
-    int32_t ttl = header.get_min_ttl() + static_cast<int32_t>(delta);
-    if (wide_local_deletion_time && ttl < header.get_min_ttl()) {
-        throw malformed_sstable_exception(format("Too big delta ttl: {}. min_ttl={}", delta, header.get_min_ttl()));
+    int64_t min_ttl = header.get_min_ttl(wide_local_deletion_time);
+    int64_t ttl;
+
+    if (!wide_local_deletion_time) {
+        if (delta > std::numeric_limits<uint32_t>::max()) {
+            throw malformed_sstable_exception(format("Too big delta ttl: {}", delta));
+        }
+        ttl = static_cast<int32_t>(min_ttl) + static_cast<int32_t>(delta);
+    } else {
+        ttl = min_ttl + static_cast<int64_t>(delta);
+        if (ttl < min_ttl) {
+            throw malformed_sstable_exception(format("Too big delta ttl: {}. min_ttl={}", delta, min_ttl));
+        }
     }
     if (ttl > max_ttl.count() && ! is_expired_liveness_ttl(ttl)) {
         throw malformed_sstable_exception(format("Too big ttl: {}", ttl));
@@ -80,12 +87,19 @@ inline gc_clock::duration parse_ttl(const serialization_header& header,
 
 inline gc_clock::time_point parse_expiry(const serialization_header& header,
                                    uint64_t delta, bool wide_local_deletion_time) {
-    if (delta > std::numeric_limits<uint32_t>::max()) {
-        throw malformed_sstable_exception(format("Too big delta local_deletion_time: {}", delta));
-    }
-    int32_t expiry = header.get_min_local_deletion_time() + static_cast<int32_t>(delta);
-    if (wide_local_deletion_time && expiry < header.get_min_local_deletion_time()) {
-        throw malformed_sstable_exception(format("Too big delta local_deletion_time: {}. min_local_deletion_time={}", delta, header.get_min_local_deletion_time()));
+    int64_t min_expiry = header.get_min_local_deletion_time(wide_local_deletion_time);
+    int64_t expiry;
+
+    if (!wide_local_deletion_time) {
+        if (delta > std::numeric_limits<uint32_t>::max()) {
+            throw malformed_sstable_exception(format("Too big delta local_deletion_time: {}", delta));
+        }
+        expiry = static_cast<int32_t>(min_expiry) + static_cast<int32_t>(delta);
+    } else {
+        expiry = min_expiry + static_cast<int64_t>(delta);
+        if (expiry < min_expiry) {
+            throw malformed_sstable_exception(format("Too big delta local_deletion_time: {}. min_local_deletion_time={}", delta, min_expiry));
+        }
     }
     return gc_clock::time_point(gc_clock::duration(expiry));
 }
