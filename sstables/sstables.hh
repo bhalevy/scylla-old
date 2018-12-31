@@ -268,6 +268,8 @@ public:
         const io_priority_class& pc = default_priority_class(),
         shard_id shard = engine().cpu_id());
 
+    encoding_stats get_encoding_stats() const;
+
     future<> seal_sstable(bool backup);
 
     static uint64_t get_estimated_key_count(const uint32_t size_at_full_sampling, const uint32_t min_index_interval) {
@@ -738,6 +740,9 @@ public:
         }
         const compaction_metadata& s = *static_cast<compaction_metadata *>(p.get());
         return s;
+    }
+    bool has_serialization_header() const {
+        return _version == sstable_version_types::mc;
     }
     const serialization_header& get_serialization_header() const {
         return get_mutable_serialization_header(*_components);
