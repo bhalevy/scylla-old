@@ -48,4 +48,16 @@ struct encoding_stats {
     api::timestamp_type min_timestamp = timestamp_epoch;
     int32_t min_local_deletion_time = 0;
     int32_t min_ttl = -1;
+
+    void apply(const encoding_stats& other) {
+        if (min_timestamp > other.min_timestamp) {
+            min_timestamp = other.min_timestamp;
+        }
+        if (min_local_deletion_time > other.min_local_deletion_time) {
+            min_local_deletion_time = other.min_local_deletion_time;
+        }
+        if (min_ttl > other.min_ttl) {
+            min_ttl = other.min_ttl;
+        }
+    }
 };
