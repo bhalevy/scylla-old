@@ -2385,6 +2385,21 @@ sstable_writer sstable::get_writer(const schema& s, uint64_t estimated_partition
     return sstable_writer(*this, s, estimated_partitions, cfg, enc_stats, pc, shard);
 }
 
+encoding_stats sstable::get_encoding_stats() const {
+    if (!has_serialization_header()) {
+        return encoding_stats{};
+    }
+
+    const serialization_header& serialization_header = get_serialization_header();
+    encoding_stats stats;
+
+    stats.min_timestamp = serialization_header.get_min_timestamp();
+    stats.min_local_deletion_time = serialization_header.get_min_local_deletion_time();
+    stats.min_ttl = serialization_header.get_min_ttl();
+
+    return stats;
+}
+
 future<> sstable::write_components(
         flat_mutation_reader mr,
         uint64_t estimated_partitions,

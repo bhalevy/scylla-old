@@ -48,4 +48,10 @@ struct encoding_stats {
     api::timestamp_type min_timestamp = timestamp_epoch;
     int32_t min_local_deletion_time = 0;  // accommodate for missing tombstone deletion_time
     int32_t min_ttl = -1;                 // accommodate for expired_liveness_ttl
+
+    void merge(const encoding_stats& other) {
+        min_timestamp = std::min(min_timestamp, other.min_timestamp);
+        min_local_deletion_time = std::min(min_local_deletion_time, other.min_local_deletion_time);
+        min_ttl = std::min(min_ttl, other.min_ttl);
+    }
 };
