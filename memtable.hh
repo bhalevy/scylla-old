@@ -221,6 +221,7 @@ private:
             update_timestamp(marker.timestamp());
             if (!marker.is_missing()) {
                 if (!marker.is_live()) {
+                    min_ttl.update(-1); // expired_liveness_ttl
                     min_local_deletion_time.update(marker.deletion_time().time_since_epoch().count());
                 } else if (marker.is_expiring()) {
                     min_ttl.update(marker.ttl().count());
