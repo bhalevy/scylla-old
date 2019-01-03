@@ -668,6 +668,10 @@ public:
         return has_scylla_component() && _components->scylla_metadata->has_feature(sstable_feature::ShadowableTombstones);
     }
 
+    bool has_wide_local_deletion_time() const {
+        return has_scylla_component() && _components->scylla_metadata->has_feature(sstable_feature::WideLocalDeletionTime);
+    }
+
     utils::UUID run_identifier() const {
         return _run_identifier;
     }
