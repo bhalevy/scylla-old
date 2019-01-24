@@ -20,6 +20,7 @@
  */
 
 
+#include <seastar/core/reactor.hh>
 #include <seastar/core/thread.hh>
 #include <seastar/tests/test-utils.hh>
 
@@ -32,6 +33,9 @@
 #include "mutation_source_test.hh"
 #include "schema_registry.hh"
 #include "service/migration_manager.hh"
+#include "sstables/sstables.hh"
+#include "db/config.hh"
+#include "tmpdir.hh"
 
 SEASTAR_TEST_CASE(test_querying_with_limits) {
     return do_with_cql_env([](cql_test_env& e) {
@@ -106,4 +110,68 @@ SEASTAR_THREAD_TEST_CASE(test_database_with_data_in_sstables_is_a_mutation_sourc
         });
         return make_ready_future<>();
     }).get();
+}
+
+SEASTAR_THREAD_TEST_CASE(test_distributed_loader_with_incomplete_sstables) {
+  do_with(tmpdir(), [] (tmpdir& data_dir) {
+    using sst = sstables::sstable;
+
+    db::config db_cfg;
+
+    db_cfg.data_file_directories({data_dir.path}, db::config::config_source::CommandLine);
+
+    // Create incomplete sstables in test data directory
+    sstring ks = "system";
+    sstring cf = "local-7ad54392bcdd35a684174e047860b377";
+    sstring sst_dir = data_dir.path + "/" + ks + "/" + cf;
+    sstring temp_sst_dir;
+    sstring temp_file_name;
+
+    auto touch_dir = [] (const sstring& dir_name) -> future<> {
+        return recursive_touch_directory(dir_name).then([dir_name = std::move(dir_name)] {
+            return file_exists(dir_name).then([] (bool dir_exists) {
+                BOOST_REQUIRE(dir_exists == true);
+            });
+        });
+    };
+
+    auto touch_file = [] (const sstring& file_name) -> future<> {
+        return open_file_dma(file_name, open_flags::create).then([] (file f) mutable {
+            return f.close();
+        }).then([file_name = std::move(file_name)] {
+            return file_exists(file_name).then([] (bool file_exists) {
+                BOOST_REQUIRE(file_exists == true);
+            });
+        });
+    };
+
+    temp_sst_dir = sst::temp_sst_dir(sst_dir, 2);
+    touch_dir(temp_sst_dir).get();
+
+    temp_sst_dir = sst::temp_sst_dir(sst_dir, 3);
+    touch_dir(temp_sst_dir).get();
+    temp_file_name = sst::filename(temp_sst_dir, ks, cf, sst::version_types::mc, 3, sst::format_types::big, component_type::TemporaryTOC);
+    touch_file(temp_file_name).get0();
+
+    temp_file_name = sst::filename(sst_dir, ks, cf, sst::version_types::mc, 4, sst::format_types::big, component_type::TemporaryTOC);
+    touch_file(temp_file_name).get0();
+    temp_file_name = sst::filename(sst_dir, ks, cf, sst::version_types::mc, 4, sst::format_types::big, component_type::Data);
+    touch_file(temp_file_name).get0();
+
+    return do_with_cql_env([sst_dir = std::move(sst_dir), ks = std::move(ks), cf = std::move(cf)] (cql_test_env& e) {
+        auto temp_dir_exists = file_exists(sst::temp_sst_dir(sst_dir, 2)).get0();
+        BOOST_REQUIRE(temp_dir_exists == false);
+        temp_dir_exists = file_exists(sst::temp_sst_dir(sst_dir, 3)).get0();
+        BOOST_REQUIRE(temp_dir_exists == false);
+
+        auto temp_file_name = sst::filename(sst_dir, ks, cf, sst::version_types::mc, 4, sst::format_types::big, component_type::TemporaryTOC);
+        auto temp_file_exists = file_exists(temp_file_name).get0();
+        BOOST_REQUIRE(temp_file_exists == false);
+        temp_file_name = sst::filename(sst_dir, ks, cf, sst::version_types::mc, 4, sst::format_types::big, component_type::Data);
+        temp_file_exists = file_exists(temp_file_name).get0();
+        BOOST_REQUIRE(temp_file_exists == false);
+
+        return make_ready_future<>();
+    }, db_cfg);
+  }).get();
 }
