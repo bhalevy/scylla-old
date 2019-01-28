@@ -114,7 +114,7 @@ v3_columns v3_columns::from_v2_schema(const schema& s) {
     std::vector<column_definition> cols;
 
     if (s.is_static_compact_table()) {
-        if (s.has_static_columns()) {
+        if (s.has_static_columns() && s.columns_count(column_kind::clustering_key) > 0) {
             throw std::runtime_error(
                 format("v2 static compact table should not have static columns: {}.{}", s.ks_name(), s.cf_name()));
         }
