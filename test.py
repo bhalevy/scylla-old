@@ -113,6 +113,7 @@ boost_tests = [
     'sstable_datafile_test',
     'broken_sstable_test',
     'sstable_3_x_test',
+    'sstable_migration_test',
     'meta_test',
     'reusable_buffer_test',
     'multishard_writer_test',
@@ -211,6 +212,7 @@ if __name__ == "__main__":
         "sstable_test": ['-c1'],
         'sstable_datafile_test': ['-c1'],
         "sstable_3_x_test": ['-c1'],
+        "sstable_migration_test": ['-c1'],
         "mutation_reader_test": ['-c{}'.format(min(os.cpu_count(), 3)), '-m2G'],
     }
 

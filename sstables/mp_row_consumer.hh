@@ -1275,6 +1275,7 @@ public:
                     _reader->push_mutation_fragment(std::move(_in_progress_static_row));
                     break;
                 case mutation_fragment_filter::result::ignore:
+                    sstlog.trace("mp_row_consumer_m {}: static row ignored", this);
                     break;
                 case mutation_fragment_filter::result::store_and_finish:
                     // static row is always either emited or ignored.
