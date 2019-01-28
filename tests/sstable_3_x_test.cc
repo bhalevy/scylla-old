@@ -41,6 +41,7 @@
 #include "tests/tmpdir.hh"
 #include "tests/sstable_utils.hh"
 #include "tests/index_reader_assertions.hh"
+#include "tests/sstable_assertions.hh"
 #include "sstables/types.hh"
 #include "keys.hh"
 #include "types.hh"
@@ -52,83 +53,6 @@
 #include "sstables/mc/writer.hh"
 
 using namespace sstables;
-
-class sstable_assertions final {
-    shared_sstable _sst;
-public:
-    sstable_assertions(schema_ptr schema, const sstring& path, int generation = 1)
-        : _sst(make_sstable(std::move(schema),
-                            path,
-                            generation,
-                            sstable_version_types::mc,
-                            sstable_format_types::big,
-                            gc_clock::now(),
-                            default_io_error_handler_gen(),
-                            1))
-    { }
-    void read_toc() {
-        _sst->read_toc().get();
-    }
-    void read_summary() {
-        _sst->read_summary(default_priority_class()).get();
-    }
-    void read_filter() {
-        _sst->read_filter(default_priority_class()).get();
-    }
-    void read_statistics() {
-        _sst->read_statistics(default_priority_class()).get();
-    }
-    void load() {
-        _sst->load().get();
-    }
-    future<index_list> read_index() {
-        load();
-        return sstables::test(_sst).read_indexes();
-    }
-    flat_mutation_reader read_rows_flat() {
-        return _sst->read_rows_flat(_sst->_schema);
-    }
-
-    const stats_metadata& get_stats_metadata() const {
-        return _sst->get_stats_metadata();
-    }
-
-    flat_mutation_reader read_range_rows_flat(
-            const dht::partition_range& range,
-            const query::partition_slice& slice,
-            const io_priority_class& pc = default_priority_class(),
-            reader_resource_tracker resource_tracker = no_resource_tracking(),
-            streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
-            mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes,
-            read_monitor& monitor = default_read_monitor()) {
-        return _sst->read_range_rows_flat(_sst->_schema,
-                                          range,
-                                          slice,
-                                          pc,
-                                          std::move(resource_tracker),
-                                          fwd,
-                                          fwd_mr,
-                                          monitor);
-    }
-    void assert_toc(const std::set<component_type>& expected_components) {
-        for (auto& expected : expected_components) {
-            if(_sst->_recognized_components.count(expected) == 0) {
-                BOOST_FAIL(format("Expected component of TOC missing: {}\n ... in: {}",
-                                  expected,
-                                  std::set<component_type>(
-                                      cbegin(_sst->_recognized_components),
-                                      cend(_sst->_recognized_components))));
-            }
-        }
-        for (auto& present : _sst->_recognized_components) {
-            if (expected_components.count(present) == 0) {
-                BOOST_FAIL(format("Unexpected component of TOC: {}\n ... when expecting: {}",
-                                  present,
-                                  expected_components));
-            }
-        }
-    }
-};
 
 // Following tests run on files in tests/sstables/3.x/uncompressed/filtering_and_forwarding
 // They were created using following CQL statements:
