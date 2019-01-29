@@ -3122,6 +3122,13 @@ delete_sstables(std::vector<sstring> tocs) {
 
 future<>
 delete_atomically(std::vector<shared_sstable> ssts, const db::large_partition_handler& large_partition_handler) {
+    if (ssts.size() <= 1) {
+        if (!ssts.empty()) {
+            return remove_by_toc_name(ssts.front()->toc_filename());
+        }
+        return make_ready_future<>();
+    }
+
     std::vector<sstring> sstables_to_delete_atomically;
 
     // Asynchronously issue delete operations for large partitions, do not handle their outcome.
