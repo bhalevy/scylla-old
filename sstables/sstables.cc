@@ -3122,13 +3122,17 @@ delete_sstables(std::vector<sstring> tocs) {
 
 future<>
 delete_atomically(std::vector<shared_sstable> ssts, const db::large_partition_handler& large_partition_handler) {
+    std::vector<sstring> sstables_to_delete_atomically;
+
     // Asynchronously issue delete operations for large partitions, do not handle their outcome.
     // If any of the operations fail, large_partition_handler should be responsible for logging or otherwise handling it.
+    sstables_to_delete_atomically.reserve(ssts.size());
     for (const auto& sst : ssts) {
         large_partition_handler.maybe_delete_large_partitions_entry(*sst);
+
+        auto toc = sst->toc_filename();
+        sstables_to_delete_atomically.emplace_back(toc);
     }
-    auto sstables_to_delete_atomically = boost::copy_range<std::vector<sstring>>(ssts
-            | boost::adaptors::transformed([] (auto&& sst) { return sst->toc_filename(); }));
 
     return delete_sstables(std::move(sstables_to_delete_atomically));
 }
