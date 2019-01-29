@@ -3122,6 +3122,16 @@ delete_sstables(std::vector<sstring> tocs) {
 
 future<>
 delete_atomically(std::vector<shared_sstable> ssts, const db::large_data_handler& large_data_handler) {
+    if (ssts.size() <= 1) {
+        if (__builtin_expect(ssts.size() == 0, false)) {
+            // Shouldn't really happen, yet harmless
+            return make_ready_future<>();
+        }
+        auto sst = ssts.front();
+        return when_all(large_data_handler.maybe_delete_large_partitions_entry(*sst),
+                        remove_by_toc_name(sst->toc_filename())).discard_result();
+    }
+
     future<> update = parallel_for_each(ssts, [&large_data_handler] (shared_sstable& sst) {
         return large_data_handler.maybe_delete_large_partitions_entry(*sst);
     });
