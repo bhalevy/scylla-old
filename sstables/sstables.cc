@@ -3114,7 +3114,6 @@ utils::hashed_key sstable::make_hashed_key(const schema& s, const partition_key&
 
 future<>
 delete_sstables(std::vector<sstring> tocs) {
-    // FIXME: this needs to be done atomically (using a log file of sstables we intend to delete)
     return parallel_for_each(tocs, [] (sstring name) {
         return remove_by_toc_name(name);
     });
@@ -3129,7 +3128,10 @@ delete_atomically(std::vector<shared_sstable> ssts, const db::large_partition_ha
         return make_ready_future<>();
     }
 
+    sstring sstdir;
+    auto buf = bytes_ostream(4096);
     std::vector<sstring> sstables_to_delete_atomically;
+    min_max_tracker<int64_t> gen_tracker;
 
     // Asynchronously issue delete operations for large partitions, do not handle their outcome.
     // If any of the operations fail, large_partition_handler should be responsible for logging or otherwise handling it.
@@ -3137,11 +3139,57 @@ delete_atomically(std::vector<shared_sstable> ssts, const db::large_partition_ha
     for (const auto& sst : ssts) {
         large_partition_handler.maybe_delete_large_partitions_entry(*sst);
 
+        if (sstdir.empty()) {
+            sstdir = sst->get_dir();
+        } else if (sstdir != sst->get_dir()) {
+            throw std::runtime_error(format("Mismatching SSTable directories to be deleted atomically: {} {}", sstdir, sst->get_dir()));
+        }
+
         auto toc = sst->toc_filename();
+        buf.write(toc.c_str(), toc.size());
+        buf.write("\n", 1);
         sstables_to_delete_atomically.emplace_back(toc);
+
+        gen_tracker.update(sst->generation());
     }
 
-    return delete_sstables(std::move(sstables_to_delete_atomically));
+    sstring pending_delete_dir = sstdir + "/" + sstable::pending_delete_dir_basename();
+    sstring pending_delete_log = format("{}/sstables-{}-{}.log", pending_delete_dir, gen_tracker.min(), gen_tracker.max());
+    return seastar::async([pending_delete_dir, pending_delete_log, buf = std::move(buf)] {
+        touch_directory(pending_delete_dir).get();
+        sstring tmp_pending_delete_log = pending_delete_log + ".tmp";
+        sstlog.trace("Writing {}", tmp_pending_delete_log);
+        auto oflags = open_flags::wo | open_flags::create | open_flags::exclusive;
+        // Create temporary pending_delete log file.
+        auto f = open_file_dma(tmp_pending_delete_log, oflags).get0();
+        // Write all toc names into the log file.
+        file_output_stream_options options;
+        options.buffer_size = 4096;
+        auto w = file_writer(std::move(f), options);
+        w.write(buf.view());
+        w.flush();
+        w.close();
+        auto dir_f = open_directory(pending_delete_dir).get0();
+        // Once flushed and closed, the temporary log file can be renamed.
+        sstable_io_check(sstable_write_error_handler, rename_file, tmp_pending_delete_log, pending_delete_log).get();
+        // Guarantee that the changes above reached the disk.
+        dir_f.flush().get();
+        dir_f.close().get();
+        sstlog.debug("{} written successfully.", pending_delete_log);
+    }).then([tocs = std::move(sstables_to_delete_atomically)] {
+        return delete_sstables(tocs);
+    }).then([pending_delete_dir, pending_delete_log] {
+        return seastar::async([pending_delete_dir, pending_delete_log] {
+            // Once all sstables are deleted, the log file can be removed.
+            auto dir_f = open_directory(pending_delete_dir).get0();
+            sstable_io_check(sstable_write_error_handler, remove_file, pending_delete_log).get();
+            // Guarantee that the changes above reached the disk.
+            dir_f.flush().get();
+            dir_f.close().get();
+            // log file is now safe in disk.
+            sstlog.debug("{} removed.", pending_delete_log);
+        });
+    });
 }
 
 thread_local sstables_stats::stats sstables_stats::_shard_stats;

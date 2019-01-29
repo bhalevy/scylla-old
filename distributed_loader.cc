@@ -540,10 +540,17 @@ future<> distributed_loader::populate_column_family(distributed<database>& db, s
             // so that the supplied callback will not block scan_dir() from
             // reading the next entry in the directory.
             if (de.type && *de.type == directory_entry_type::directory) {
+                // Cleanup on shard 0 only.
+                if (engine().cpu_id() != 0) {
+                    return make_ready_future<>();
+                }
                 fs::path dirpath = sstdir / de.name;
-                if (engine().cpu_id() == 0 && sstables::sstable::is_temp_dir(dirpath)) {
+                if (sstables::sstable::is_temp_dir(dirpath)) {
                     dblog.info("Found temporary sstable directory: {}, removing", dirpath);
                     futures.push_back(lister::rmdir(dirpath));
+                } else if (sstables::sstable::is_pending_delete_dir(dirpath)) {
+                    dblog.debug("Found pending_delete directory: {}", dirpath);
+                    // FIXME: process pending deletes
                 }
                 return make_ready_future<>();
             }
