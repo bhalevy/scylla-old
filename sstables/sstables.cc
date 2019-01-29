@@ -2916,11 +2916,16 @@ fsync_directory(const io_error_handler& error_handler, sstring fname) {
 
 future<>
 remove_by_toc_name(sstring sstable_toc_name, const io_error_handler& error_handler) {
+    if (sstable_toc_name.empty()) {
+        return make_ready_future<>();
+    }
+
     return seastar::async([sstable_toc_name, &error_handler] () mutable {
         sstring prefix = sstable_toc_name.substr(0, sstable_toc_name.size() - sstable_version_constants::TOC_SUFFIX.size());
         auto new_toc_name = prefix + sstable_version_constants::TEMPORARY_TOC_SUFFIX;
         sstring dir;
 
+        sstlog.debug("Removing by TOC name: {}", sstable_toc_name);
         if (sstable_io_check(error_handler, file_exists, sstable_toc_name).get0()) {
             dir = dirname(sstable_toc_name);
             sstable_io_check(error_handler, rename_file, sstable_toc_name, new_toc_name).get();
@@ -3189,6 +3194,21 @@ delete_atomically(std::vector<shared_sstable> ssts, const db::large_partition_ha
             // log file is now safe in disk.
             sstlog.debug("{} removed.", pending_delete_log);
         });
+    });
+}
+
+future<> replay_pending_delete_log(sstring pending_delete_log) {
+    sstlog.debug("Reading pending_deletes log file {}", pending_delete_log);
+    return seastar::async([pending_delete_log] {
+        auto f = open_file_dma(pending_delete_log, open_flags::ro).get0();
+        auto size = f.size().get0();
+        auto in = make_file_input_stream(std::move(f));
+        auto text = in.read_exactly(size).get0();
+        in.close().get();
+        std::vector<sstring> tocs;
+        sstring all(text.begin(), text.end());
+        boost::split(tocs, all, boost::is_any_of("\n"), boost::token_compress_on);
+        delete_sstables(tocs).get();
     });
 }
 

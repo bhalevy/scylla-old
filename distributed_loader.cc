@@ -519,6 +519,8 @@ future<> distributed_loader::do_cleanup_column_family(sstring sstdir) {
 
     enum cleanup_type {
         temp_sstable_dir,
+        temp_pending_delete_log,
+        pending_delete_log,
     };
 
     struct cleanup {
@@ -536,7 +538,17 @@ future<> distributed_loader::do_cleanup_column_family(sstring sstdir) {
                 cleanups.push_back({ temp_sstable_dir, de.name });
             } else if (sstables::sstable::is_pending_delete_dir(dirpath)) {
                 dblog.debug("Found pending_delete directory: {}", dirpath);
-                // FIXME: process pending deletes
+                return lister::scan_dir(dirpath, { directory_entry_type::regular }, [&cleanups] (fs::path dir, directory_entry de) {
+                    fs::path file_path = dir / de.name;
+                    if (file_path.extension() == ".tmp") {
+                        cleanups.push_back({ temp_pending_delete_log, de.name });
+                    } else if (file_path.extension() == ".log") {
+                        cleanups.push_back({ pending_delete_log, de.name });
+                    } else {
+                        dblog.debug("Found unknown file in pending_delete directory: {}, ignoring", file_path);
+                    }
+                    return make_ready_future<>();
+                });
             }
             return make_ready_future<>();
         }).then([&cleanups, sstdir = std::move(sstdir)] {
@@ -546,6 +558,19 @@ future<> distributed_loader::do_cleanup_column_family(sstring sstdir) {
                     auto dir_path = sstdir + "/" + c.name;
                     dblog.info("Found temporary sstable directory: {}, removing", dir_path);
                     return lister::rmdir(fs::path(dir_path));
+                }
+                case temp_pending_delete_log: {
+                    auto file_path = sstdir + "/" + sstables::sstable::pending_delete_dir_basename() + "/" + c.name;
+                    dblog.info("Found temporary pending_delete log file: {}, deleting", file_path);
+                    return remove_file(file_path);
+                }
+                case pending_delete_log: {
+                    auto file_path = sstdir + "/" + sstables::sstable::pending_delete_dir_basename() + "/" + c.name;
+                    dblog.info("Found pending_delete log file: {}, replaying", file_path);
+                    return sstables::replay_pending_delete_log(file_path).then([file_path = std::move(file_path)] {
+                        dblog.debug("Replayed {}, removing", file_path);
+                        return remove_file(file_path);
+                    });
                 }
                 }
                 // should never get here
