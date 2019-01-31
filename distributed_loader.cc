@@ -512,7 +512,51 @@ future<sstables::entry_descriptor> distributed_loader::probe_file(distributed<da
     });
 }
 
-future<> distributed_loader::populate_column_family(distributed<database>& db, sstring sstdir, sstring ks, sstring cf) {
+future<> distributed_loader::do_cleanup_column_family(sstring sstdir) {
+    if (engine().cpu_id() != 0) {
+        return make_ready_future<>();
+    }
+
+    enum cleanup_type {
+        temp_sstable_dir,
+    };
+
+    struct cleanup {
+        cleanup_type type;
+        sstring name;
+    };
+
+    return do_with(std::vector<cleanup>(), [sstdir = std::move(sstdir)] (std::vector<cleanup>& cleanups) {
+        return lister::scan_dir(sstdir, { directory_entry_type::directory }, [&cleanups] (fs::path sstdir, directory_entry de) {
+            // push nested cleanups that may remove files/directories into an array of futures,
+            // so that the supplied callback will not block scan_dir() from
+            // reading the next entry in the directory.
+            fs::path dirpath = sstdir / de.name;
+            if (sstables::sstable::is_temp_dir(dirpath)) {
+                cleanups.push_back({ temp_sstable_dir, de.name });
+            } else if (sstables::sstable::is_pending_delete_dir(dirpath)) {
+                dblog.debug("Found pending_delete directory: {}", dirpath);
+                // FIXME: process pending deletes
+            }
+            return make_ready_future<>();
+        }).then([&cleanups, sstdir = std::move(sstdir)] {
+            return do_for_each(cleanups, [sstdir = std::move(sstdir)] (cleanup& c) {
+                switch (c.type) {
+                case temp_sstable_dir: {
+                    auto dir_path = sstdir + "/" + c.name;
+                    dblog.info("Found temporary sstable directory: {}, removing", dir_path);
+                    return lister::rmdir(fs::path(dir_path));
+                }
+                }
+                // should never get here
+                assert(0);
+                return make_ready_future<>();
+            });
+        });
+    });
+}
+
+future<> distributed_loader::do_populate_column_family(distributed<database>& db, sstring sstdir, sstring ks, sstring cf) {
     // We can catch most errors when we try to load an sstable. But if the TOC
     // file is the one missing, we won't try to load the sstable at all. This
     // case is still an invalid case, but it is way easier for us to treat it
@@ -533,28 +577,12 @@ future<> distributed_loader::populate_column_family(distributed<database>& db, s
     auto verifier = make_lw_shared<std::unordered_map<unsigned long, sstable_descriptor>>();
 
     return do_with(std::vector<future<>>(), [&db, sstdir = std::move(sstdir), verifier, ks, cf] (std::vector<future<>>& futures) {
-        return lister::scan_dir(sstdir, { directory_entry_type::regular, directory_entry_type::directory }, [&db, verifier, &futures] (fs::path sstdir, directory_entry de) {
+        return lister::scan_dir(sstdir, { directory_entry_type::regular }, [&db, verifier, &futures] (fs::path sstdir, directory_entry de) {
             // FIXME: The secondary indexes are in this level, but with a directory type, (starting with ".")
 
-            // push future returned by probe_file/rmdir into an array of futures,
+            // push future returned by probe_file into an array of futures,
             // so that the supplied callback will not block scan_dir() from
             // reading the next entry in the directory.
-            if (de.type && *de.type == directory_entry_type::directory) {
-                // Cleanup on shard 0 only.
-                if (engine().cpu_id() != 0) {
-                    return make_ready_future<>();
-                }
-                fs::path dirpath = sstdir / de.name;
-                if (sstables::sstable::is_temp_dir(dirpath)) {
-                    dblog.info("Found temporary sstable directory: {}, removing", dirpath);
-                    futures.push_back(lister::rmdir(dirpath));
-                } else if (sstables::sstable::is_pending_delete_dir(dirpath)) {
-                    dblog.debug("Found pending_delete directory: {}", dirpath);
-                    // FIXME: process pending deletes
-                }
-                return make_ready_future<>();
-            }
-
             auto f = distributed_loader::probe_file(db, sstdir.native(), de.name).then([verifier, sstdir, de] (auto entry) {
                 if (entry.component == component_type::TemporaryStatistics) {
                     return remove_file(sstables::sstable::filename(sstdir.native(), entry.ks, entry.cf, entry.version, entry.generation,
@@ -631,6 +659,14 @@ future<> distributed_loader::populate_column_family(distributed<database>& db, s
         });
     });
 
+}
+
+future<> distributed_loader::populate_column_family(distributed<database>& db, sstring sstdir, sstring ks, sstring cf) {
+    // First pass, cleanup temporary sstable directories and sstables pending delete.
+    return do_cleanup_column_family(sstdir).then([&db, sstdir = std::move(sstdir), ks = std::move(ks), cf = std::move(cf)] {
+        // Second pass, cleanup sstables with temporary TOCs and load the rest.
+        return do_populate_column_family(db, std::move(sstdir), std::move(ks), std::move(cf));
+    });
 }
 
 future<> distributed_loader::populate_keyspace(distributed<database>& db, sstring datadir, sstring ks_name) {
