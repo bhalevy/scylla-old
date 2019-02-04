@@ -3111,7 +3111,6 @@ utils::hashed_key sstable::make_hashed_key(const schema& s, const partition_key&
 
 future<>
 delete_sstables(std::vector<sstring> tocs) {
-    // FIXME: this needs to be done atomically (using a log file of sstables we intend to delete)
     return parallel_for_each(tocs, [] (sstring name) {
         return remove_by_toc_name(name);
     });
@@ -3133,15 +3132,16 @@ sstable::delete_sstable(const db::large_data_handler* large_data_handler) {
 }
 
 future<>
-delete_atomically(std::vector<shared_sstable> ssts, const db::large_data_handler& large_data_handler) {
-    future<> update = parallel_for_each(ssts, [&large_data_handler] (shared_sstable& sst) {
-        return large_data_handler.maybe_delete_large_partitions_entry(*sst);
+delete_sstables(std::vector<shared_sstable> ssts, const db::large_data_handler& large_data_handler) {
+    return parallel_for_each(ssts, [&large_data_handler] (shared_sstable sst) {
+        return sst->delete_sstable(&large_data_handler);
     });
-    auto sstables_to_delete_atomically = boost::copy_range<std::vector<sstring>>(ssts
-            | boost::adaptors::transformed([] (auto&& sst) { return sst->toc_filename(); }));
+}
 
-    future<> del = delete_sstables(std::move(sstables_to_delete_atomically));
-    return when_all(std::move(del), std::move(update)).discard_result();
+future<>
+delete_atomically(std::vector<shared_sstable> ssts, const db::large_data_handler& large_data_handler) {
+    // FIXME: this needs to be done atomically (using a log file of sstables we intend to delete)
+    return delete_sstables(std::move(ssts), large_data_handler);
 }
 
 thread_local sstables_stats::stats sstables_stats::_shard_stats;

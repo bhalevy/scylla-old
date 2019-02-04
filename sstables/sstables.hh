@@ -811,6 +811,7 @@ public:
     template <typename DataConsumeRowsContext>
     friend data_consume_context<DataConsumeRowsContext>
     data_consume_rows(const schema&, shared_sstable, typename DataConsumeRowsContext::consumer&);
+    friend future<> delete_sstables(std::vector<shared_sstable>, const db::large_data_handler&);
 };
 
 struct entry_descriptor {
