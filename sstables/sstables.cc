@@ -2549,8 +2549,8 @@ bool sstable::requires_view_building() const {
     return boost::algorithm::ends_with(_dir, "staging") || boost::algorithm::ends_with(_dir, "upload");
 }
 
-sstring sstable::filename(const sstring& dir, const sstring& ks, const sstring& cf, version_types version, int64_t generation,
-                          format_types format, component_type component) {
+sstring sstable::component_basename(const sstring& ks, const sstring& cf, version_types version, int64_t generation,
+                                    format_types format, component_type component) {
     static std::unordered_map<version_types, std::function<sstring (entry_descriptor d)>, enum_hash<version_types>> strmap = {
         { sstable::version_types::ka, [] (entry_descriptor d) {
             return d.ks + "-" + d.cf + "-" + _version_string.at(d.version) + "-" + to_sstring(d.generation) + "-"
@@ -2566,7 +2566,12 @@ sstring sstable::filename(const sstring& dir, const sstring& ks, const sstring& 
         },
     };
 
-    return dir + "/" + strmap[version](entry_descriptor(dir, ks, cf, version, generation, format, component));
+    return strmap[version](entry_descriptor(ks, cf, version, generation, format, component));
+}
+
+sstring sstable::filename(const sstring& dir, const sstring& ks, const sstring& cf, version_types version, int64_t generation,
+                          format_types format, component_type component) {
+    return dir + "/" + component_basename(ks, cf, version, generation, format, component);
 }
 
 sstring sstable::filename(const sstring& dir, const sstring& ks, const sstring& cf, version_types version, int64_t generation,
