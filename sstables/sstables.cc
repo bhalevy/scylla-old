@@ -3111,9 +3111,15 @@ utils::hashed_key sstable::make_hashed_key(const schema& s, const partition_key&
 
 future<>
 delete_sstables(std::vector<sstring> tocs) {
-    // FIXME: this needs to be done atomically (using a log file of sstables we intend to delete)
     return parallel_for_each(tocs, [] (sstring name) {
         return remove_by_toc_name(name);
+    });
+}
+
+future<>
+delete_sstables(std::vector<shared_sstable> ssts) {
+    return parallel_for_each(ssts, [] (shared_sstable sst) {
+        return remove_by_toc_name(sst->toc_filename());
     });
 }
 
@@ -3132,10 +3138,9 @@ delete_atomically(std::vector<shared_sstable> ssts, const db::large_data_handler
     future<> update = parallel_for_each(ssts, [&large_data_handler] (shared_sstable& sst) {
         return large_data_handler.maybe_delete_large_partitions_entry(*sst);
     });
-    auto sstables_to_delete_atomically = boost::copy_range<std::vector<sstring>>(ssts
-            | boost::adaptors::transformed([] (auto&& sst) { return sst->toc_filename(); }));
 
-    future<> del = delete_sstables(std::move(sstables_to_delete_atomically));
+    // FIXME: this needs to be done atomically (using a log file of sstables we intend to delete)
+    future<> del = delete_sstables(std::move(ssts));
     return when_all(std::move(del), std::move(update)).discard_result();
 }
 
