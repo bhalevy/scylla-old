@@ -3902,7 +3902,7 @@ SEASTAR_TEST_CASE(test_unknown_component) {
         BOOST_REQUIRE(!file_exists(tmp.path().string() +  "/la-1-big-UNKNOWN.txt").get0());
         BOOST_REQUIRE(file_exists(tmp.path().string() + "/la-2-big-UNKNOWN.txt").get0());
 
-        sstables::delete_atomically({sstp}, nop_lp_handler).get();
+        sstables::delete_atomically({sstp}).get();
         // assure unknown component is deleted
         BOOST_REQUIRE(!file_exists(tmp.path().string() + "/la-2-big-UNKNOWN.txt").get0());
     });

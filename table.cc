@@ -1181,7 +1181,7 @@ table::on_compaction_completion(const std::vector<sstables::shared_sstable>& new
     // This is done in the background, so we can consider this compaction completed.
     seastar::with_gate(_sstable_deletion_gate, [this, sstables_to_remove] {
        return with_semaphore(_sstable_deletion_sem, 1, [this, sstables_to_remove = std::move(sstables_to_remove)] {
-        return sstables::delete_atomically(sstables_to_remove, *get_large_data_handler()).then_wrapped([this, sstables_to_remove] (future<> f) {
+        return sstables::delete_atomically(sstables_to_remove).then_wrapped([this, sstables_to_remove] (future<> f) {
             std::exception_ptr eptr;
             try {
                 f.get();
@@ -1922,7 +1922,7 @@ future<db::replay_position> table::discard_sstables(db_clock::time_point truncat
         }).then([this, p]() mutable {
             return parallel_for_each(p->remove, [this](sstables::shared_sstable s) {
                 _compaction_strategy.get_backlog_tracker().remove_sstable(s);
-                return sstables::delete_atomically({s}, *get_large_data_handler());
+                return sstables::delete_atomically({s});
             }).then([p] {
                 return make_ready_future<db::replay_position>(p->rp);
             });

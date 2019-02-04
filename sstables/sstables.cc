@@ -3127,9 +3127,8 @@ sstable::unlink() {
     }
 }
 
-// FIXME: obliterate large_data_handler param
 future<>
-delete_atomically(std::vector<shared_sstable> ssts, const db::large_data_handler& large_data_handler) {
+delete_atomically(std::vector<shared_sstable> ssts) {
     // FIXME: this needs to be done atomically (using a log file of sstables we intend to delete)
     return parallel_for_each(ssts, [] (shared_sstable sst) {
         return sst->unlink();
