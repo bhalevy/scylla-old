@@ -3140,7 +3140,10 @@ delete_atomically(std::vector<shared_sstable> ssts, const db::large_data_handler
     });
 
     // FIXME: this needs to be done atomically (using a log file of sstables we intend to delete)
-    future<> del = delete_sstables(std::move(ssts));
+    future<> del = seastar::async([ssts = std::move(ssts)] {
+        delete_sstables(std::move(ssts)).get();
+    });
+
     return when_all(std::move(del), std::move(update)).discard_result();
 }
 
