@@ -812,9 +812,9 @@ table::seal_active_streaming_memtable_immediate(flush_permit&& permit) {
                         return old->clear_gently();
                       }
                     });
-                }).handle_exception([old, permit = std::move(permit), &monitor, newtab] (auto ep) {
+                }).handle_exception([this, old, permit = std::move(permit), &monitor, newtab] (auto ep) {
                     monitor.write_failed();
-                    newtab->mark_for_deletion();
+                    newtab->mark_for_deletion(get_large_data_handler());
                     tlogger.error("failed to write streamed sstable: {}", ep);
                     return make_exception_future<>(ep);
                 });
@@ -854,7 +854,7 @@ future<> table::seal_active_streaming_memtable_big(streaming_memtable_big& smb, 
                         return make_ready_future<>();
                     } else {
                         monitor->write_failed();
-                        newtab->mark_for_deletion();
+                        newtab->mark_for_deletion(get_large_data_handler());
                         auto ep = f.get_exception();
                         tlogger.error("failed to write streamed sstable: {}", ep);
                         return make_exception_future<>(ep);
@@ -966,7 +966,7 @@ table::try_flush_memtable_to_sstable(lw_shared_ptr<memtable> old, sstable_write_
                 });
             }).handle_exception([this, old, newtab, &monitor] (auto e) {
                 monitor.write_failed();
-                newtab->mark_for_deletion();
+                newtab->mark_for_deletion(get_large_data_handler());
                 tlogger.error("failed to write sstable {}: {}", newtab->get_filename(), e);
                 // If we failed this write we will try the write again and that will create a new flush reader
                 // that will decrease dirty memory again. So we need to reset the accounting.
@@ -1869,7 +1869,7 @@ future<> table::fail_streaming_mutations(utils::UUID plan_id) {
     return entry->flush_in_progress.close().then([this, entry] {
         for (auto&& sst : entry->sstables) {
             sst.monitor->write_failed();
-            sst.sstable->mark_for_deletion();
+            sst.sstable->mark_for_deletion(get_large_data_handler());
         }
     });
 }

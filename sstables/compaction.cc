@@ -104,13 +104,14 @@ static bool belongs_to_current_node(const dht::token& t, const dht::token_range_
     return false;
 }
 
-static void delete_sstables_for_interrupted_compaction(std::vector<shared_sstable>& new_sstables, sstring& ks, sstring& cf) {
+static void delete_sstables_for_interrupted_compaction(std::vector<shared_sstable>& new_sstables, sstring& ks, sstring& cf,
+                                                       const db::large_data_handler* large_data_handler) {
     // Delete either partially or fully written sstables of a compaction that
     // was either stopped abruptly (e.g. out of disk space) or deliberately
     // (e.g. nodetool stop COMPACTION).
     for (auto& sst : new_sstables) {
         clogger.debug("Deleting sstable {} of interrupted compaction for {}.{}", sst->get_filename(), ks, cf);
-        sst->mark_for_deletion();
+        sst->mark_for_deletion(large_data_handler);
     }
 }
 
@@ -869,7 +870,7 @@ future<compaction_info> compaction::run(std::unique_ptr<compaction> c) {
             auto r = std::move(reader);
             r.consume_in_thread(std::move(cfc), c->filter_func(), db::no_timeout);
         } catch (...) {
-            delete_sstables_for_interrupted_compaction(c->_info->new_sstables, c->_info->ks_name, c->_info->cf_name);
+            delete_sstables_for_interrupted_compaction(c->_info->new_sstables, c->_info->ks_name, c->_info->cf_name, c->_cf.get_large_data_handler());
             c = nullptr; // make sure writers are stopped while running in thread context
             throw;
         }

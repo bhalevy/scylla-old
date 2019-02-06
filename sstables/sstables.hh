@@ -292,8 +292,9 @@ public:
     // all shards sharing it agree. In case the sstable is unshared, it's
     // guaranteed that all of its on-disk files will be deleted as soon as
     // the in-memory object is destroyed.
-    void mark_for_deletion() {
+    void mark_for_deletion(const db::large_data_handler* large_data_handler) {
         _marked_for_deletion = true;
+        _large_data_handler = large_data_handler;
     }
 
     bool marked_for_deletion() const {
@@ -509,6 +510,7 @@ private:
     filter_tracker _filter_tracker;
 
     bool _marked_for_deletion = false;
+    const db::large_data_handler* _large_data_handler = nullptr;
 
     gc_clock::time_point _now;
 
