@@ -646,6 +646,8 @@ private:
         serialization_header& s = *static_cast<serialization_header *>(p.get());
         return s;
     }
+
+    future<> delete_sstable(const db::large_data_handler* large_data_handler);
 public:
     future<> read_toc();
 
