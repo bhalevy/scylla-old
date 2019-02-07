@@ -3072,7 +3072,6 @@ static tmpdir write_sstables(schema_ptr s, lw_shared_ptr<memtable> mt1, lw_share
     tmpdir tmp;
     auto sst = sstables::test::make_test_sstable(4096, s, tmp.path().string(), 1, sstables::sstable_version_types::mc, sstable::format_types::big);
     sstable_writer_config cfg;
-    cfg.large_data_handler = &nop_lp_handler;
     sst->write_components(make_combined_reader(s,
         mt1->make_flat_reader(s),
         mt2->make_flat_reader(s)), 1, s, cfg, mt1->get_encoding_stats()).get();
@@ -4943,7 +4942,6 @@ SEASTAR_THREAD_TEST_CASE(test_sstable_reader_on_unknown_column) {
         tmpdir dir;
         sstable_writer_config cfg;
         cfg.promoted_index_block_size = index_block_size;
-        cfg.large_data_handler = &nop_lp_handler;
         auto sst = sstables::make_sstable(write_schema,
             dir.path().string(),
             1 /* generation */,
@@ -5011,15 +5009,12 @@ static void test_sstable_write_large_row_f(schema_ptr s, memtable& mt, const par
         ++i;
     };
 
-    large_row_handler handler(threshold, f);
     tmpdir dir;
+    large_row_handler handler(threshold, f);
     auto sst = sstables::make_sstable(
             s, dir.path().string(), 1 /* generation */, sstable_version_types::mc, sstables::sstable::format_types::big, &handler);
 
-    sstable_writer_config cfg;
-    cfg.large_data_handler = &handler;
-
-    sst->write_components(mt.make_flat_reader(s), 1, s, std::move(cfg)).get();
+    sst->write_components(mt.make_flat_reader(s), 1, s, sstable_writer_config{}).get();
     BOOST_REQUIRE_EQUAL(i, expected.size());
 }
 

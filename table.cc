@@ -804,7 +804,7 @@ table::seal_active_streaming_memtable_immediate(flush_permit&& permit) {
             database_sstable_write_monitor monitor(std::move(fp), newtab, _compaction_manager, _compaction_strategy, old->get_max_timestamp());
             return do_with(std::move(monitor), [this, newtab, old, permit = std::move(permit)] (auto& monitor) mutable {
                 auto&& priority = service::get_local_streaming_write_priority();
-                return write_memtable_to_sstable(*old, newtab, monitor, get_large_data_handler(), incremental_backups_enabled(), priority, false).then([this, newtab, old] {
+                return write_memtable_to_sstable(*old, newtab, monitor, incremental_backups_enabled(), priority, false).then([this, newtab, old] {
                     return newtab->open_data();
                 }).then([this, old, newtab] () {
                     return with_scheduling_group(_config.memtable_to_cache_scheduling_group, [this, newtab, old] {
@@ -852,7 +852,7 @@ future<> table::seal_active_streaming_memtable_big(streaming_memtable_big& smb, 
                 auto fp = permit.release_sstable_write_permit();
                 auto monitor = std::make_unique<database_sstable_write_monitor>(std::move(fp), newtab, _compaction_manager, _compaction_strategy, old->get_max_timestamp());
                 auto&& priority = service::get_local_streaming_write_priority();
-                auto fut = write_memtable_to_sstable(*old, newtab, *monitor, get_large_data_handler(), incremental_backups_enabled(), priority, true);
+                auto fut = write_memtable_to_sstable(*old, newtab, *monitor, incremental_backups_enabled(), priority, true);
                 return fut.then_wrapped([this, newtab, old, &smb, permit = std::move(permit), monitor = std::move(monitor)] (future<> f) mutable {
                     if (!f.failed()) {
                         smb.sstables.push_back(monitored_sstable{std::move(monitor), newtab});
@@ -948,7 +948,7 @@ table::try_flush_memtable_to_sstable(lw_shared_ptr<memtable> old, sstable_write_
     database_sstable_write_monitor monitor(std::move(permit), newtab, _compaction_manager, _compaction_strategy, old->get_max_timestamp());
     return do_with(std::move(monitor), [this, old, newtab] (auto& monitor) {
         auto&& priority = service::get_local_memtable_flush_priority();
-        auto f = write_memtable_to_sstable(*old, newtab, monitor, get_large_data_handler(), incremental_backups_enabled(), priority, false);
+        auto f = write_memtable_to_sstable(*old, newtab, monitor, incremental_backups_enabled(), priority, false);
         // Switch back to default scheduling group for post-flush actions, to avoid them being staved by the memtable flush
         // controller. Cache update does not affect the input of the memtable cpu controller, so it can be subject to
         // priority inversion.
@@ -2265,22 +2265,21 @@ table::apply(const frozen_mutation& m, const schema_ptr& m_schema, db::rp_handle
 
 future<>
 write_memtable_to_sstable(memtable& mt, sstables::shared_sstable sst,
-                          sstables::write_monitor& monitor, db::large_data_handler* lp_handler,
+                          sstables::write_monitor& monitor,
                           bool backup, const io_priority_class& pc, bool leave_unsealed) {
     sstables::sstable_writer_config cfg;
     cfg.replay_position = mt.replay_position();
     cfg.backup = backup;
     cfg.leave_unsealed = leave_unsealed;
     cfg.monitor = &monitor;
-    cfg.large_data_handler = lp_handler;
     return sst->write_components(mt.make_flush_reader(mt.schema(), pc), mt.partition_count(),
         mt.schema(), cfg, mt.get_encoding_stats(), pc);
 }
 
 future<>
-write_memtable_to_sstable(memtable& mt, sstables::shared_sstable sst, db::large_data_handler* lp_handler) {
-    return do_with(permit_monitor(sstable_write_permit::unconditional()), [&mt, sst, lp_handler] (auto& monitor) {
-        return write_memtable_to_sstable(mt, std::move(sst), monitor, lp_handler);
+write_memtable_to_sstable(memtable& mt, sstables::shared_sstable sst) {
+    return do_with(permit_monitor(sstable_write_permit::unconditional()), [&mt, sst] (auto& monitor) {
+        return write_memtable_to_sstable(mt, std::move(sst), monitor);
     });
 }
 

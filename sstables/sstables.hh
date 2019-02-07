@@ -117,7 +117,6 @@ struct sstable_writer_config {
     std::optional<db::replay_position> replay_position;
     write_monitor* monitor = &default_write_monitor();
     bool correctly_serialize_non_compound_range_tombstones = supports_correct_non_compound_range_tombstones();
-    db::large_data_handler* large_data_handler;
     utils::UUID run_identifier = utils::make_random_uuid();
 };
 
@@ -648,6 +647,10 @@ private:
         }
         serialization_header& s = *static_cast<serialization_header *>(p.get());
         return s;
+    }
+
+    const db::large_data_handler* get_large_data_handler() const {
+        return _large_data_handler;
     }
 public:
     future<> read_toc();
