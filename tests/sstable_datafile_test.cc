@@ -400,7 +400,7 @@ SEASTAR_TEST_CASE(datafile_generation_05) {
         mt->apply(std::move(m));
 
         auto now = to_gc_clock(db_clock::from_time_t(0));
-        auto sst = make_sstable(s, tmpdir_path, 5, la, big, now);
+        auto sst = make_sstable(s, tmpdir_path, 5, la, big, &db::default_large_data_handler, now);
 
         return write_memtable_to_sstable_for_test(*mt, sst).then([mt, sst, s, tmpdir_path] {
             auto fname = sstable::filename(tmpdir_path, "ks", "cf", la, 5, big, component_type::Data);

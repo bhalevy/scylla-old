@@ -210,7 +210,7 @@ distributed_loader::flush_upload_dir(distributed<database>& db, distributed<db::
                 return seastar::async([&db, &sys_dist_ks, ks_name = std::move(ks_name), cf_name = std::move(cf_name), comps = std::move(comps)] () mutable {
                     auto& cf = db.find_column_family(ks_name, cf_name);
                     auto sst = sstables::make_sstable(cf.schema(), cf._config.datadir + "/upload", comps.generation,
-                        comps.version, comps.format, gc_clock::now(),
+                        comps.version, comps.format, cf.get_large_data_handler(), gc_clock::now(),
                         [] (disk_error_signal_type&) { return error_handler_for_upload_dir(); });
                     auto gen = cf.calculate_generation_for_new_table();
 
@@ -257,7 +257,8 @@ future<> distributed_loader::open_sstable(distributed<database>& db, sstables::e
         return with_semaphore(local.sstable_load_concurrency_sem(), 1, [&db, &local, comps = std::move(comps), func = std::move(func), &pc] {
             auto& cf = local.find_column_family(comps.ks, comps.cf);
 
-            auto f = sstables::sstable::load_shared_components(cf.schema(), comps.sstdir, comps.generation, comps.version, comps.format, pc);
+            auto f = sstables::sstable::load_shared_components(cf.schema(), comps.sstdir, comps.generation, comps.version, comps.format,
+                    cf.get_large_data_handler(), pc);
             return f.then([&db, comps = std::move(comps), func = std::move(func)] (sstables::sstable_open_info info) {
                 // shared components loaded, now opening sstable in all shards that own it with shared components
                 return do_with(std::move(info), [&db, comps = std::move(comps), func = std::move(func)] (auto& info) {

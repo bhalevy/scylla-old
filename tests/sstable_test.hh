@@ -173,7 +173,7 @@ public:
 
     static sstable_ptr make_test_sstable(size_t buffer_size, schema_ptr schema, sstring dir, unsigned long generation, sstable::version_types v,
             sstable::format_types f, gc_clock::time_point now = gc_clock::now()) {
-        return sstables::make_sstable(std::move(schema), dir, generation, v, f, now, default_io_error_handler_gen(), buffer_size);
+        return sstables::make_sstable(std::move(schema), dir, generation, v, f, &db::default_large_data_handler, now, default_io_error_handler_gen(), buffer_size);
     }
 
     // Used to create synthetic sstables for testing leveled compaction strategy.

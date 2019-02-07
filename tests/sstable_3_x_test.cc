@@ -64,6 +64,7 @@ public:
                             generation,
                             sstable_version_types::mc,
                             sstable_format_types::big,
+                            &db::default_large_data_handler,
                             gc_clock::now(),
                             default_io_error_handler_gen(),
                             1))
@@ -4995,10 +4996,6 @@ struct large_row_handler : public db::large_data_handler {
 
 static void test_sstable_write_large_row_f(schema_ptr s, memtable& mt, const partition_key& pk,
         std::vector<clustering_key*> expected, uint64_t threshold) {
-    tmpdir dir;
-    auto sst = sstables::make_sstable(
-            s, dir.path().string(), 1 /* generation */, sstable_version_types::mc, sstables::sstable::format_types::big);
-
     unsigned i = 0;
     auto f = [&i, &expected, &pk, &threshold](const schema& s, const sstables::key& partition_key,
                      const clustering_key_prefix* clustering_key, uint64_t row_size) {
@@ -5015,6 +5012,10 @@ static void test_sstable_write_large_row_f(schema_ptr s, memtable& mt, const par
     };
 
     large_row_handler handler(threshold, f);
+    tmpdir dir;
+    auto sst = sstables::make_sstable(
+            s, dir.path().string(), 1 /* generation */, sstable_version_types::mc, sstables::sstable::format_types::big, &handler);
+
     sstable_writer_config cfg;
     cfg.large_data_handler = &handler;
 

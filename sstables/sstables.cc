@@ -174,9 +174,10 @@ future<> await_background_jobs_on_all_shards() {
 }
 
 shared_sstable
-make_sstable(schema_ptr schema, sstring dir, int64_t generation, sstable_version_types v, sstable_format_types f, gc_clock::time_point now,
-            io_error_handler_gen error_handler_gen, size_t buffer_size) {
-    return make_lw_shared<sstable>(std::move(schema), std::move(dir), generation, v, f, now, std::move(error_handler_gen), buffer_size);
+make_sstable(schema_ptr schema, sstring dir, int64_t generation, sstable_version_types v, sstable_format_types f,
+             const db::large_data_handler* large_data_handler, gc_clock::time_point now,
+             io_error_handler_gen error_handler_gen, size_t buffer_size) {
+    return make_lw_shared<sstable>(std::move(schema), std::move(dir), generation, v, f, large_data_handler, now, std::move(error_handler_gen), buffer_size);
 }
 
 std::unordered_map<sstable::version_types, sstring, enum_hash<sstable::version_types>> sstable::_version_string = {
@@ -1391,8 +1392,8 @@ future<> sstable::load(sstables::foreign_sstable_open_info info) {
 }
 
 future<sstable_open_info> sstable::load_shared_components(const schema_ptr& s, sstring dir, int generation, version_types v, format_types f,
-        const io_priority_class& pc) {
-    auto sst = sstables::make_sstable(s, dir, generation, v, f);
+        const db::large_data_handler* large_data_handler, const io_priority_class& pc) {
+    auto sst = sstables::make_sstable(s, dir, generation, v, f, large_data_handler);
     return sst->load(pc).then([sst] () mutable {
         auto info = sstable_open_info{make_lw_shared<shareable_components>(std::move(*sst->_components)),
             std::move(sst->_shards), std::move(sst->_data_file), std::move(sst->_index_file)};

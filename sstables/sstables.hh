@@ -125,7 +125,8 @@ static constexpr inline size_t default_sstable_buffer_size() {
     return 128 * 1024;
 }
 
-shared_sstable make_sstable(schema_ptr schema, sstring dir, int64_t generation, sstable_version_types v, sstable_format_types f, gc_clock::time_point now = gc_clock::now(),
+shared_sstable make_sstable(schema_ptr schema, sstring dir, int64_t generation, sstable_version_types v, sstable_format_types f,
+            const db::large_data_handler* large_data_handler = &db::default_large_data_handler, gc_clock::time_point now = gc_clock::now(),
             io_error_handler_gen error_handler_gen = default_io_error_handler_gen(), size_t buffer_size = default_sstable_buffer_size());
 
 class sstable : public enable_lw_shared_from_this<sstable> {
@@ -135,7 +136,8 @@ public:
     using format_types = sstable_format_types;
     static const size_t default_buffer_size = default_sstable_buffer_size();
 public:
-    sstable(schema_ptr schema, sstring dir, int64_t generation, version_types v, format_types f, gc_clock::time_point now,
+    sstable(schema_ptr schema, sstring dir, int64_t generation, version_types v, format_types f,
+            const db::large_data_handler* large_data_handler, gc_clock::time_point now,
             io_error_handler_gen error_handler_gen, size_t buffer_size)
         : sstable_buffer_size(buffer_size)
         , _schema(std::move(schema))
@@ -146,6 +148,7 @@ public:
         , _now(now)
         , _read_error_handler(error_handler_gen(sstable_read_error))
         , _write_error_handler(error_handler_gen(sstable_write_error))
+        , _large_data_handler(large_data_handler)
     { }
     sstable& operator=(const sstable&) = delete;
     sstable(const sstable&) = delete;
@@ -517,6 +520,8 @@ private:
 
     sstables_stats _stats;
 
+    const db::large_data_handler* _large_data_handler;
+
     const bool has_component(component_type f) const;
 
     future<file> open_file(component_type, open_flags, file_open_options = {});
@@ -781,7 +786,7 @@ public:
 
     // returns all info needed for a sstable to be shared with other shards.
     static future<sstable_open_info> load_shared_components(const schema_ptr& s, sstring dir, int generation, version_types v, format_types f,
-        const io_priority_class& pc = default_priority_class());
+        const db::large_data_handler* large_data_handler, const io_priority_class& pc = default_priority_class());
 
     sstables_stats& get_stats() {
         return _stats;

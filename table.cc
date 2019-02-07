@@ -598,7 +598,7 @@ flat_mutation_reader make_local_shard_sstable_reader(schema_ptr s,
 
 sstables::shared_sstable table::make_sstable(sstring dir, int64_t generation,
         sstables::sstable_version_types v, sstables::sstable_format_types f) {
-    return sstables::make_sstable(_schema, dir, generation, v, f);
+    return sstables::make_sstable(_schema, dir, generation, v, f, get_large_data_handler());
 }
 
 sstables::shared_sstable table::make_sstable(sstring dir) {
