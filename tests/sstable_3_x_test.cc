@@ -4400,6 +4400,10 @@ static std::unique_ptr<index_reader> get_index_reader(shared_sstable sst) {
     return std::make_unique<index_reader>(sst, default_priority_class());
 }
 
+shared_sstable make_test_sstable(schema_ptr schema, const sstring& table_name, int64_t gen = 1) {
+    return sstables::make_sstable(schema, get_read_index_test_path(table_name), gen, sstable_version_types::mc, sstable_format_types::big);
+}
+
 /*
  * The SSTables read is generated using the following queries:
  *
@@ -4415,7 +4419,7 @@ SEASTAR_THREAD_TEST_CASE(test_read_empty_index) {
     builder.set_compressor_params(compression_parameters::no_compression());
     schema_ptr s = builder.build(schema_builder::compact_storage::no);
 
-    auto sst = sstables::make_sstable(s, get_read_index_test_path(table_name), 1, sstable_version_types::mc , sstable_format_types::big);
+    auto sst = make_test_sstable(s, table_name);
     sst->load().get0();
     assert_that(get_index_reader(sst)).is_empty(*s);
 }
@@ -4435,7 +4439,7 @@ SEASTAR_THREAD_TEST_CASE(test_read_rows_only_index) {
     builder.set_compressor_params(compression_parameters::no_compression());
     schema_ptr s = builder.build(schema_builder::compact_storage::no);
 
-    auto sst = sstables::make_sstable(s, get_read_index_test_path(table_name), 1, sstable_version_types::mc , sstable_format_types::big);
+    auto sst = make_test_sstable(s, table_name);
     sst->load().get0();
     assert_that(get_index_reader(sst)).has_monotonic_positions(*s);
 }
@@ -4454,7 +4458,7 @@ SEASTAR_THREAD_TEST_CASE(test_read_range_tombstones_only_index) {
     builder.set_compressor_params(compression_parameters::no_compression());
     schema_ptr s = builder.build(schema_builder::compact_storage::no);
 
-    auto sst = sstables::make_sstable(s, get_read_index_test_path(table_name), 1, sstable_version_types::mc , sstable_format_types::big);
+    auto sst = make_test_sstable(s, table_name);
     sst->load().get0();
     assert_that(get_index_reader(sst)).has_monotonic_positions(*s);
 }
@@ -4481,7 +4485,7 @@ SEASTAR_THREAD_TEST_CASE(test_read_range_tombstone_boundaries_index) {
     builder.set_compressor_params(compression_parameters::no_compression());
     schema_ptr s = builder.build(schema_builder::compact_storage::no);
 
-    auto sst = sstables::make_sstable(s, get_read_index_test_path(table_name), 1, sstable_version_types::mc , sstable_format_types::big);
+    auto sst = make_test_sstable(s, table_name);
     sst->load().get0();
     assert_that(get_index_reader(sst)).has_monotonic_positions(*s);
 }
