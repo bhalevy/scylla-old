@@ -32,8 +32,6 @@
 
 using namespace sstables;
 
-static db::nop_large_data_handler nop_lp_handler;
-
 class test_env {
 public:
     struct conf {

@@ -49,8 +49,6 @@
 using namespace sstables;
 using namespace std::chrono_literals;
 
-static db::nop_large_data_handler nop_lp_handler;
-
 SEASTAR_THREAD_TEST_CASE(nonexistent_key) {
     auto wait_bg = seastar::defer([] { sstables::await_background_jobs().get(); });
     reusable_sst(uncompressed_schema(), uncompressed_dir(), 1).then([] (auto sstp) {

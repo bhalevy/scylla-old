@@ -3067,7 +3067,6 @@ static void compare_sstables(const seastar::compat::filesystem::path& result_pat
 }
 
 static tmpdir write_sstables(schema_ptr s, lw_shared_ptr<memtable> mt1, lw_shared_ptr<memtable> mt2) {
-    static db::nop_large_data_handler nop_lp_handler;
     storage_service_for_tests ssft;
     tmpdir tmp;
     auto sst = sstables::test::make_test_sstable(4096, s, tmp.path().string(), 1, sstables::sstable_version_types::mc, sstable::format_types::big);
@@ -4906,7 +4905,6 @@ SEASTAR_THREAD_TEST_CASE(test_read_missing_summary) {
 }
 
 SEASTAR_THREAD_TEST_CASE(test_sstable_reader_on_unknown_column) {
-    db::nop_large_data_handler nop_lp_handler;
     api::timestamp_type write_timestamp = 1525385507816568;
     auto wait_bg = seastar::defer([] { sstables::await_background_jobs().get(); });
     storage_service_for_tests ssft;

@@ -71,8 +71,6 @@ using namespace sstables;
 static sstring some_keyspace("ks");
 static sstring some_column_family("cf");
 
-static db::nop_large_data_handler nop_lp_handler;
-
 static column_family::config column_family_test_config() {
     return column_family::config();
 }

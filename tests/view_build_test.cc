@@ -28,12 +28,11 @@
 #include <seastar/testing/test_case.hh>
 #include "tests/cql_test_env.hh"
 #include "tests/cql_assertions.hh"
+#include "tests/sstable_utils.hh"
 #include "schema_builder.hh"
 #include "service/priority_manager.hh"
 
 using namespace std::literals::chrono_literals;
-
-static db::nop_large_data_handler nop_lp_handler;
 
 schema_ptr test_table_schema() {
     static thread_local auto s = [] {
