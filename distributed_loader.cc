@@ -40,8 +40,6 @@
 
 extern logging::logger dblog;
 
-sstables::sstable::version_types get_highest_supported_format();
-
 static const std::unordered_set<sstring> system_keyspaces = {
                 db::system_keyspace::NAME, db::schema_tables::NAME
 };
@@ -352,13 +350,10 @@ void distributed_loader::reshard(distributed<database>& db, sstring ks_name, sst
                     auto creator = [&cf, directory] (shard_id shard) mutable {
                         // we need generation calculated by instance of cf at requested shard,
                         // or resource usage wouldn't be fairly distributed among shards.
-                        auto gen = smp::submit_to(shard, [&cf] () {
-                            return cf->calculate_generation_for_new_table();
+                        auto sst = smp::submit_to(shard, [&cf, directory] () {
+                            return cf->make_sstable(directory);
                         }).get0();
 
-                        // FIXME: submit_to(shard, make_sstable)
-                        auto sst = cf->make_sstable(directory, gen,
-                            get_highest_supported_format(), sstables::sstable::format_types::big);
                         return sst;
                     };
                     auto f = sstables::reshard_sstables(sstables, *cf, creator, max_sstable_bytes, level);
