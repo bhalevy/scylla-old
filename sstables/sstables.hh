@@ -135,8 +135,8 @@ public:
     using format_types = sstable_format_types;
     static const size_t default_buffer_size = default_sstable_buffer_size();
 public:
-    sstable(schema_ptr schema, sstring dir, int64_t generation, version_types v, format_types f, gc_clock::time_point now = gc_clock::now(),
-            io_error_handler_gen error_handler_gen = default_io_error_handler_gen(), size_t buffer_size = default_buffer_size)
+    sstable(schema_ptr schema, sstring dir, int64_t generation, version_types v, format_types f, gc_clock::time_point now,
+            io_error_handler_gen error_handler_gen, size_t buffer_size)
         : sstable_buffer_size(buffer_size)
         , _schema(std::move(schema))
         , _dir(std::move(dir))
