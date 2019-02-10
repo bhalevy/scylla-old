@@ -4375,7 +4375,7 @@ SEASTAR_TEST_CASE(test_wrong_counter_shard_order) {
                     .with_column("c5", counter_type)
                     .build();
 
-            auto sst = make_lw_shared<sstable>(s, get_test_dir("wrong_counter_shard_order", s), 2, version, big);
+            auto sst = make_sstable(s, get_test_dir("wrong_counter_shard_order", s), 2, version, big);
             sst->load().get0();
             auto reader = sstable_reader(sst, s);
 
