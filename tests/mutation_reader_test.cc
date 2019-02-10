@@ -724,7 +724,7 @@ sstables::shared_sstable create_sstable(simple_schema& sschema, const sstring& p
     }
 
     return make_sstable_containing([&] {
-            return make_lw_shared<sstables::sstable>(sschema.schema(), path, 0, sstables::sstable::version_types::la, sstables::sstable::format_types::big);
+            return make_sstable(sschema.schema(), path, 0, sstables::sstable::version_types::la, sstables::sstable::format_types::big);
         }
         , mutations);
 }
@@ -734,7 +734,7 @@ sstables::shared_sstable create_sstable(schema_ptr s, std::vector<mutation> muta
     static thread_local auto tmp = tmpdir();
     static int gen = 0;
     return make_sstable_containing([&] {
-        return make_lw_shared<sstables::sstable>(s, tmp.path().string(), gen++, sstables::sstable::version_types::la, sstables::sstable::format_types::big);
+        return make_sstable(s, tmp.path().string(), gen++, sstables::sstable::version_types::la, sstables::sstable::format_types::big);
     }, mutations);
 }
 
