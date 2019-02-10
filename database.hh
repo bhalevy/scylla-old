@@ -319,7 +319,7 @@ public:
         seastar::scheduling_group statement_scheduling_group;
         seastar::scheduling_group streaming_scheduling_group;
         bool enable_metrics_reporting = false;
-        db::large_data_handler* large_data_handler;
+        db::large_data_handler* large_data_handler = &db::default_large_data_handler;
         db::timeout_semaphore* view_update_concurrency_semaphore;
         size_t view_update_concurrency_semaphore_limit;
         db::data_listeners* data_listeners = nullptr;
@@ -1252,7 +1252,6 @@ private:
     query::querier_cache _querier_cache;
 
     std::unique_ptr<db::large_data_handler> _large_data_handler;
-    std::unique_ptr<db::large_data_handler> _nop_large_data_handler;
 
     query::result_memory_limiter _result_memory_limiter;
 
@@ -1402,10 +1401,6 @@ public:
 
     db::large_data_handler* get_large_data_handler() const {
         return _large_data_handler.get();
-    }
-
-    db::large_data_handler* get_nop_large_data_handler() const {
-        return _nop_large_data_handler.get();
     }
 
     future<> flush_all_memtables();

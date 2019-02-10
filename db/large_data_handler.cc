@@ -27,6 +27,9 @@
 
 namespace db {
 
+// A global no-operation large_data_handler
+thread_local nop_large_data_handler default_large_data_handler;
+
 future<> large_data_handler::maybe_update_large_partitions(const sstables::sstable& sst, const sstables::key& key, uint64_t partition_size) const {
     if (partition_size > _partition_threshold_bytes) {
         ++_stats.partitions_bigger_than_threshold;

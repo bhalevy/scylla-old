@@ -96,4 +96,6 @@ public:
                                const clustering_key_prefix* clustering_key, uint64_t row_size) const override {}
 };
 
+extern thread_local nop_large_data_handler default_large_data_handler;
+
 }

@@ -2873,18 +2873,12 @@ static std::vector<sstables::shared_sstable> open_sstables(schema_ptr s, sstring
 
 static flat_mutation_reader compacted_sstable_reader(schema_ptr s,
                      sstring table_name, std::vector<unsigned long> generations) {
-    auto column_family_test_config = [] {
-        static db::nop_large_data_handler nop_lp_handler;
-        column_family::config cfg;
-        cfg.large_data_handler = &nop_lp_handler;
-        return cfg;
-    };
     storage_service_for_tests ssft;
 
     auto cm = make_lw_shared<compaction_manager>();
     auto cl_stats = make_lw_shared<cell_locker_stats>();
     auto tracker = make_lw_shared<cache_tracker>();
-    auto cf = make_lw_shared<column_family>(s, column_family_test_config(), column_family::no_commitlog(), *cm, *cl_stats, *tracker);
+    auto cf = make_lw_shared<column_family>(s, column_family::config(), column_family::no_commitlog(), *cm, *cl_stats, *tracker);
     cf->mark_ready_for_writes();
     lw_shared_ptr<memtable> mt = make_lw_shared<memtable>(s);
 

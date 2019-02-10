@@ -864,7 +864,6 @@ SEASTAR_TEST_CASE(reshuffle) {
             cfg.datadir = generation_dir;
             cfg.enable_commitlog = false;
             cfg.enable_incremental_backups = false;
-            cfg.large_data_handler = &nop_lp_handler;
             auto cl_stats = make_lw_shared<cell_locker_stats>();
             auto cf = make_lw_shared<column_family>(uncompressed_schema(), cfg, column_family::no_commitlog(), *cm, *cl_stats, *tracker);
             cf->start();

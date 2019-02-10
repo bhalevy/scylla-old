@@ -74,9 +74,7 @@ static sstring some_column_family("cf");
 static db::nop_large_data_handler nop_lp_handler;
 
 static column_family::config column_family_test_config() {
-    column_family::config cfg;
-    cfg.large_data_handler = &nop_lp_handler;
-    return cfg;
+    return column_family::config();
 }
 
 atomic_cell make_atomic_cell(data_type dt, bytes_view value, uint32_t ttl = 0, uint32_t expiration = 0) {
@@ -1057,7 +1055,6 @@ SEASTAR_TEST_CASE(compaction_manager_test) {
     cfg.datadir = tmp.path().string();
     cfg.enable_commitlog = false;
     cfg.enable_incremental_backups = false;
-    cfg.large_data_handler = &nop_lp_handler;
     auto cl_stats = make_lw_shared<cell_locker_stats>();
     auto tracker = make_lw_shared<cache_tracker>();
     auto cf = make_lw_shared<column_family>(s, cfg, column_family::no_commitlog(), *cm, *cl_stats, *tracker);
@@ -1257,7 +1254,6 @@ struct column_family_for_tests {
         _data->s = s;
         _data->cfg.enable_disk_writes = false;
         _data->cfg.enable_commitlog = false;
-        _data->cfg.large_data_handler = &nop_lp_handler;
         _data->cf = make_lw_shared<column_family>(_data->s, _data->cfg, column_family::no_commitlog(), _data->cm, _data->cl_stats, _data->tracker);
         _data->cf->mark_ready_for_writes();
     }
