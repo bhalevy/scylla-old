@@ -2854,9 +2854,6 @@ int sstable::compare_by_max_timestamp(const sstable& other) const {
     return (ts1 > ts2 ? 1 : (ts1 == ts2 ? 0 : -1));
 }
 
-future<>
-delete_sstables(std::vector<sstring> tocs);
-
 sstable::~sstable() {
     if (_index_file) {
         _index_file.close().handle_exception([save = _index_file, op = background_jobs().start()] (auto ep) {
@@ -2879,7 +2876,7 @@ sstable::~sstable() {
         // clean up unused sstables, and because we'll never reuse the same
         // generation number anyway.
         try {
-            delete_sstables({filename(component_type::TOC)}).handle_exception(
+            unlink().handle_exception(
                         [op = background_jobs().start()] (std::exception_ptr eptr) {
                             try {
                                 std::rethrow_exception(eptr);
@@ -3117,6 +3114,18 @@ delete_sstables(std::vector<sstring> tocs) {
     return parallel_for_each(tocs, [] (sstring name) {
         return remove_by_toc_name(name);
     });
+}
+
+future<>
+sstable::unlink() {
+    future<> remove_fut = remove_by_toc_name(toc_filename());
+
+    try {
+        future<> large_data_handler_fut = get_large_data_handler()->maybe_delete_large_partitions_entry(*this);
+        return when_all(std::move(remove_fut), std::move(large_data_handler_fut)).discard_result();
+    } catch (...) {
+        return remove_fut;
+    }
 }
 
 future<>
