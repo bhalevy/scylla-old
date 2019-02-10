@@ -115,7 +115,7 @@ load_sstables_with_open_info(std::vector<sstables::foreign_sstable_open_info> ss
             if (!pred(info)) {
                 return make_ready_future<>();
             }
-            auto sst = sstables::make_sstable(cf->schema(), dir, info.generation, info.version, info.format);
+            auto sst = cf->make_sstable(dir, info.generation, info.version, info.format);
             return sst->load(std::move(info)).then([&ssts, sst] {
                 ssts.push_back(std::move(sst));
                 return make_ready_future<>();
@@ -352,7 +352,8 @@ void distributed_loader::reshard(distributed<database>& db, sstring ks_name, sst
                             return cf->calculate_generation_for_new_table();
                         }).get0();
 
-                        auto sst = sstables::make_sstable(cf->schema(), directory, gen,
+                        // FIXME: submit_to(shard, make_sstable)
+                        auto sst = cf->make_sstable(directory, gen,
                             get_highest_supported_format(), sstables::sstable::format_types::big);
                         return sst;
                     };

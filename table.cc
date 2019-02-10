@@ -484,10 +484,7 @@ sstables::shared_sstable table::make_streaming_sstable_for_write(std::optional<s
     if (subdir) {
         dir += "/" + *subdir;
     }
-    auto newtab = sstables::make_sstable(_schema,
-            dir, calculate_generation_for_new_table(),
-            get_highest_supported_format(),
-            sstables::sstable::format_types::big);
+    auto newtab = make_sstable(dir);
     tlogger.debug("Created sstable for streaming: ks={}, cf={}, dir={}", schema()->ks_name(), schema()->cf_name(), dir);
     return newtab;
 }
@@ -599,10 +596,24 @@ flat_mutation_reader make_local_shard_sstable_reader(schema_ptr s,
             fwd_mr);
 }
 
+sstables::shared_sstable table::make_sstable(sstring dir, int64_t generation,
+        sstables::sstable_version_types v, sstables::sstable_format_types f) {
+    return sstables::make_sstable(_schema, dir, generation, v, f);
+}
+
+sstables::shared_sstable table::make_sstable(sstring dir) {
+    return make_sstable(dir, calculate_generation_for_new_table(),
+                        get_highest_supported_format(), sstables::sstable::format_types::big);
+}
+
+sstables::shared_sstable table::make_sstable() {
+    return make_sstable(_config.datadir);
+}
+
 future<sstables::shared_sstable>
 table::open_sstable(sstables::foreign_sstable_open_info info, sstring dir, int64_t generation,
         sstables::sstable::version_types v, sstables::sstable::format_types f) {
-    auto sst = sstables::make_sstable(_schema, dir, generation, v, f);
+    auto sst = make_sstable(dir, generation, v, f);
     if (!belongs_to_current_shard(info.owners)) {
         tlogger.debug("sstable {} not relevant for this shard, ignoring", sst->get_filename());
         return make_ready_future<sstables::shared_sstable>();
@@ -775,10 +786,7 @@ table::seal_active_streaming_memtable_immediate(flush_permit&& permit) {
     auto guard = _streaming_flush_phaser.start();
     return with_gate(_streaming_flush_gate, [this, old, permit = std::move(permit)] () mutable {
         return with_lock(_sstables_lock.for_read(), [this, old, permit = std::move(permit)] () mutable {
-            auto newtab = sstables::make_sstable(_schema,
-                _config.datadir, calculate_generation_for_new_table(),
-                get_highest_supported_format(),
-                sstables::sstable::format_types::big);
+            auto newtab = make_sstable();
 
             newtab->set_unshared();
 
@@ -837,10 +845,7 @@ future<> table::seal_active_streaming_memtable_big(streaming_memtable_big& smb, 
     return with_gate(_streaming_flush_gate, [this, old, &smb, permit = std::move(permit)] () mutable {
         return with_gate(smb.flush_in_progress, [this, old, &smb, permit = std::move(permit)] () mutable {
             return with_lock(_sstables_lock.for_read(), [this, old, &smb, permit = std::move(permit)] () mutable {
-                auto newtab = sstables::make_sstable(_schema,
-                                                     _config.datadir, calculate_generation_for_new_table(),
-                                                     get_highest_supported_format(),
-                                                     sstables::sstable::format_types::big);
+                auto newtab = make_sstable();
 
                 newtab->set_unshared();
 
@@ -925,12 +930,7 @@ table::seal_active_memtable(flush_permit&& permit) {
 future<stop_iteration>
 table::try_flush_memtable_to_sstable(lw_shared_ptr<memtable> old, sstable_write_permit&& permit) {
   return with_scheduling_group(_config.memtable_scheduling_group, [this, old = std::move(old), permit = std::move(permit)] () mutable {
-    auto gen = calculate_generation_for_new_table();
-
-    auto newtab = sstables::make_sstable(_schema,
-        _config.datadir, gen,
-        get_highest_supported_format(),
-        sstables::sstable::format_types::big);
+    auto newtab = make_sstable();
 
     newtab->set_unshared();
     tlogger.debug("Flushing to {}", newtab->get_filename());
@@ -1023,9 +1023,7 @@ table::reshuffle_sstables(std::set<int64_t> all_generations, int64_t start) {
             if (work.all_generations.count(comps.generation) != 0) {
                 return make_ready_future<>();
             }
-            auto sst = sstables::make_sstable(_schema,
-                                                         _config.datadir, comps.generation,
-                                                         comps.version, comps.format);
+            auto sst = make_sstable(_config.datadir, comps.generation, comps.version, comps.format);
             work.sstables.emplace(comps.generation, std::move(sst));
             work.descriptors.emplace(comps.generation, std::move(comps));
             // FIXME: This is the only place in which we actually issue disk activity aside from
@@ -1260,10 +1258,7 @@ table::compact_sstables(sstables::compaction_descriptor descriptor, bool cleanup
 
     return with_lock(_sstables_lock.for_read(), [this, descriptor = std::move(descriptor), cleanup] () mutable {
         auto create_sstable = [this] {
-                auto gen = this->calculate_generation_for_new_table();
-                auto sst = sstables::make_sstable(_schema, _config.datadir, gen,
-                        get_highest_supported_format(),
-                        sstables::sstable::format_types::big);
+                auto sst = make_sstable();
                 sst->set_unshared();
                 return sst;
         };
