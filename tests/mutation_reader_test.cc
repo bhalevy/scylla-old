@@ -35,6 +35,7 @@
 #include "tests/flat_mutation_reader_assertions.hh"
 #include "tests/tmpdir.hh"
 #include "tests/sstable_utils.hh"
+#include "tests/sstable_test.hh"
 #include "tests/simple_schema.hh"
 #include "tests/test_services.hh"
 #include "tests/mutation_source_test.hh"
@@ -384,6 +385,7 @@ SEASTAR_TEST_CASE(test_sm_fast_forwarding_combining_reader) {
 }
 
 struct sst_factory {
+    sstables::test_env env;
     schema_ptr s;
     sstring path;
     unsigned gen;
@@ -397,7 +399,7 @@ struct sst_factory {
     {}
 
     sstables::shared_sstable operator()() {
-        auto sst = sstables::make_sstable(s, path, gen, sstables::sstable::version_types::la, sstables::sstable::format_types::big);
+        auto sst = env.make_sstable(s, path, gen, sstables::sstable::version_types::la, sstables::sstable::format_types::big);
         sst->set_unshared();
         //sst->set_sstable_level(level);
         sst->get_metadata_collector().sstable_level(level);
