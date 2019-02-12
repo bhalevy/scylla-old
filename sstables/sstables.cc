@@ -2562,7 +2562,7 @@ sstring sstable::filename(const sstring& dir, const sstring& ks, const sstring& 
         },
     };
 
-    return dir + "/" + strmap[version](entry_descriptor(dir, ks, cf, version, generation, format, component));
+    return dir + "/" + strmap[version](entry_descriptor(dir, ks, cf, generation, version, format, component));
 }
 
 sstring sstable::filename(const sstring& dir, const sstring& ks, const sstring& cf, version_types version, int64_t generation,
@@ -2692,7 +2692,7 @@ entry_descriptor entry_descriptor::make_descriptor(sstring sstdir, sstring fname
     } else {
         throw malformed_sstable_exception(seastar::format("invalid version for file {}. Name doesn't match any known version.", fname));
     }
-    return entry_descriptor(sstdir, ks, cf, version, boost::lexical_cast<unsigned long>(generation), sstable::format_from_sstring(format), sstable::component_from_sstring(version, component));
+    return entry_descriptor(sstdir, ks, cf, boost::lexical_cast<unsigned long>(generation), version, sstable::format_from_sstring(format), sstable::component_from_sstring(version, component));
 }
 
 sstable::version_types sstable::version_from_sstring(sstring &s) {
