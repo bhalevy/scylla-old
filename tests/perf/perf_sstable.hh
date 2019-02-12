@@ -173,6 +173,7 @@ public:
                 auto cm = make_lw_shared<compaction_manager>();
                 column_family::config cfg;
                 cfg.large_data_handler = &nop_lp_handler;
+                cfg.sstables_manager = &test_sstables_manager;
                 auto cf = make_lw_shared<column_family>(s, cfg, column_family::no_commitlog(), *cm, cl_stats, tracker);
 
                 auto start = perf_sstable_test_env::now();

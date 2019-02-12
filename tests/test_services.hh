@@ -32,6 +32,7 @@
 #include "cell_locking.hh"
 #include "sstables/compaction_manager.hh"
 #include "db/large_data_handler.hh"
+#include "sstables/sstables_manager.hh"
 
 // Includes: database, auth, storage_service
 class storage_service_for_tests {
@@ -43,6 +44,7 @@ public:
 };
 
 static db::nop_large_data_handler nop_lp_handler;
+static sstables::sstables_manager test_sstables_manager;
 
 column_family::config column_family_test_config();
 
