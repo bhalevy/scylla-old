@@ -72,6 +72,7 @@
 #include "sstables/sstable_set.hh"
 #include "sstables/progress_monitor.hh"
 #include "sstables/version.hh"
+#include "sstables/sstables_manager.hh"
 #include <seastar/core/rwlock.hh>
 #include <seastar/core/shared_future.hh>
 #include <seastar/core/metrics_registration.hh>
@@ -454,6 +455,7 @@ private:
 
     // Provided by the database that owns this commitlog
     db::commitlog* _commitlog;
+    sstables::manager _sstables_manager;
     compaction_manager& _compaction_manager;
     secondary_index::secondary_index_manager _index_manager;
     int _compaction_disabled = 0;
@@ -494,6 +496,10 @@ private:
     utils::phased_barrier _pending_reads_phaser;
     // Corresponding phaser for in-progress streams
     utils::phased_barrier _pending_streams_phaser;
+
+    sstables::manager& get_sstables_manager() {
+        return _sstables_manager;
+    }
 public:
     future<> add_sstable_and_update_cache(sstables::shared_sstable sst);
     void move_sstable_from_staging_in_thread(sstables::shared_sstable sst);

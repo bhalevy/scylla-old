@@ -35,6 +35,7 @@
 #include "tmpdir.hh"
 #include <boost/filesystem.hpp>
 #include <array>
+#include "sstables/sstables_manager.hh"
 
 constexpr auto la = sstables::sstable::version_types::la;
 constexpr auto big = sstables::sstable::format_types::big;
@@ -71,6 +72,7 @@ namespace sstables {
 using sstable_ptr = shared_sstable;
 
 class test {
+    sstables::manager _sstables_manager;
     sstable_ptr _sst;
 public:
 

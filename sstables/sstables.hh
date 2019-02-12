@@ -61,6 +61,7 @@
 #include "column_translation.hh"
 #include "stats.hh"
 #include "utils/observable.hh"
+#include "sstables/shareable_components.hh"
 
 #include <seastar/util/optimized_optional.hh>
 
@@ -120,13 +121,6 @@ struct sstable_writer_config {
     db::large_data_handler* large_data_handler;
     utils::UUID run_identifier = utils::make_random_uuid();
 };
-
-static constexpr inline size_t default_sstable_buffer_size() {
-    return 128 * 1024;
-}
-
-shared_sstable make_sstable(schema_ptr schema, sstring dir, int64_t generation, sstable_version_types v, sstable_format_types f, gc_clock::time_point now = gc_clock::now(),
-            io_error_handler_gen error_handler_gen = default_io_error_handler_gen(), size_t buffer_size = default_sstable_buffer_size());
 
 class sstable : public enable_lw_shared_from_this<sstable> {
     friend ::sstable_assertions;
@@ -426,15 +420,6 @@ public:
     auto sstable_write_io_check(Func&& func, Args&&... args) const {
         return do_io_check(_write_error_handler, func, std::forward<Args>(args)...);
     }
-
-    // Immutable components that can be shared among shards.
-    struct shareable_components {
-        sstables::compression compression;
-        utils::filter_ptr filter;
-        sstables::summary summary;
-        sstables::statistics statistics;
-        std::optional<sstables::scylla_metadata> scylla_metadata;
-    };
 private:
     size_t sstable_buffer_size;
 
@@ -778,6 +763,7 @@ public:
     // at another shard.
     future<foreign_sstable_open_info> get_open_info() &;
 
+
     // returns all info needed for a sstable to be shared with other shards.
     future<sstable_open_info> load_shared_components();
 
@@ -805,23 +791,6 @@ public:
     template <typename DataConsumeRowsContext>
     friend data_consume_context<DataConsumeRowsContext>
     data_consume_rows(const schema&, shared_sstable, typename DataConsumeRowsContext::consumer&);
-};
-
-struct entry_descriptor {
-    sstring sstdir;
-    sstring ks;
-    sstring cf;
-    sstable::version_types version;
-    int64_t generation;
-    sstable::format_types format;
-    component_type component;
-
-    static entry_descriptor make_descriptor(sstring sstdir, sstring fname);
-
-    entry_descriptor(sstring sstdir, sstring ks, sstring cf, int64_t generation,
-                     sstable::version_types version, sstable::format_types format,
-                     component_type component)
-        : sstdir(sstdir), ks(ks), cf(cf), version(version), generation(generation), format(format), component(component) {}
 };
 
 // Waits for all prior tasks started on current shard related to sstable management to finish.
@@ -879,26 +848,6 @@ public:
     stop_iteration consume(range_tombstone&& rt);
     stop_iteration consume_end_of_partition();
     void consume_end_of_stream();
-};
-
-// contains data for loading a sstable using components shared by a single shard;
-// can be moved across shards
-struct foreign_sstable_open_info {
-    foreign_ptr<lw_shared_ptr<sstable::shareable_components>> components;
-    std::vector<shard_id> owners;
-    seastar::file_handle data;
-    seastar::file_handle index;
-    uint64_t generation;
-    sstable::version_types version;
-    sstable::format_types format;
-};
-
-// can only be used locally
-struct sstable_open_info {
-    lw_shared_ptr<sstable::shareable_components> components;
-    std::vector<shard_id> owners;
-    file data;
-    file index;
 };
 
 future<> init_metrics();
