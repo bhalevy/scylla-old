@@ -964,10 +964,14 @@ static schema_ptr large_partition_schema() {
     return s;
 }
 
-static future<shared_sstable> load_large_partition_sst(const sstables::sstable::version_types version) {
+template <typename Func>
+inline auto
+load_large_partition_sst(const sstables::sstable::version_types version, Func&& func) {
     auto s = large_partition_schema();
     auto dir = get_test_dir("large_partition", s);
-    return reusable_sst(std::move(s), std::move(dir), 3, version);
+    return reusable_sst(std::move(s), std::move(dir), 3, version).then([func = std::move(func)] (shared_sstable sst) {
+        return func(sst);
+    });
 }
 
 // This is a rudimentary test that reads an sstable exported from Cassandra
@@ -976,11 +980,12 @@ static future<shared_sstable> load_large_partition_sst(const sstables::sstable::
 // search for anything.
 SEASTAR_TEST_CASE(promoted_index_read) {
   return for_each_sstable_version([] (const sstables::sstable::version_types version) {
-    return load_large_partition_sst(version).then([] (auto sstp) {
+    return load_large_partition_sst(version, [] (auto sstp) {
         schema_ptr s = large_partition_schema();
         return sstables::test(sstp).read_indexes().then([sstp] (index_list vec) {
             BOOST_REQUIRE(vec.size() == 1);
             BOOST_REQUIRE(vec.front().get_promoted_index_size() > 0);
+            return make_ready_future<>();
         });
     });
   });
@@ -1082,8 +1087,8 @@ static future<int> count_rows(sstable_ptr sstp, schema_ptr s, sstring ck1, sstri
 // of read from disk, add printouts to the row reading code.
 SEASTAR_TEST_CASE(sub_partition_read) {
   schema_ptr s = large_partition_schema();
-  return for_each_sstable_version([s] (const sstables::sstable::version_types version) {
-    return load_large_partition_sst(version).then([s] (auto sstp) {
+  return for_each_sstable_version([s = std::move(s)] (const sstables::sstable::version_types version) {
+    return load_large_partition_sst(version, [s = std::move(s)] (auto sstp) {
         return count_rows(sstp, s, "v1", "18wX", "18xB").then([] (int nrows) {
             // there should be 5 rows (out of 13520 = 20*26*26) in this range:
             // 18wX, 18wY, 18wZ, 18xA, 18xB.
@@ -1139,6 +1144,8 @@ SEASTAR_TEST_CASE(sub_partition_read) {
             return count_rows(sstp, s, "v1").then([] (int nrows) {
                 BOOST_REQUIRE(nrows == 20*26*26);
             });
+        }).then([] {
+            return make_ready_future<>();
         });
     });
   });
@@ -1149,10 +1156,11 @@ SEASTAR_TEST_CASE(sub_partition_read) {
 // sstable, there is actually just one partition).
 SEASTAR_TEST_CASE(sub_partitions_read) {
   schema_ptr s = large_partition_schema();
-  return for_each_sstable_version([s] (const sstables::sstable::version_types version) {
-    return load_large_partition_sst(version).then([s] (auto sstp) {
+  return for_each_sstable_version([s = std::move(s)] (const sstables::sstable::version_types version) {
+    return load_large_partition_sst(version, [s = std::move(s)] (auto sstp) {
         return count_rows(sstp, s, "18wX", "18xB").then([] (int nrows) {
             BOOST_REQUIRE(nrows == 5);
+            return make_ready_future<>();
         });
     });
   });
