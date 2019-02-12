@@ -99,6 +99,7 @@ with_column_family(schema_ptr s, column_family::config cfg, noncopyable_function
     cfg.datadir = dir.path().string();
     auto cm = make_lw_shared<compaction_manager>();
     auto cl_stats = make_lw_shared<cell_locker_stats>();
+
     auto cf = make_lw_shared<column_family>(s, cfg, column_family::no_commitlog(), *cm, *cl_stats, *tracker);
     cf->mark_ready_for_writes();
     return func(*cf).then([cf, cm] {
@@ -327,12 +328,11 @@ SEASTAR_TEST_CASE(test_multiple_memtables_one_partition) {
         {{"p1", utf8_type}}, {{"c1", int32_type}}, {{"r1", int32_type}}, {}, utf8_type));
 
     auto cf_stats = make_lw_shared<::cf_stats>();
-    column_family::config cfg;
+    column_family::config cfg = column_family_test_config();
     cfg.enable_disk_reads = false;
     cfg.enable_disk_writes = false;
     cfg.enable_incremental_backups = false;
     cfg.cf_stats = &*cf_stats;
-    cfg.large_data_handler = &nop_lp_handler;
 
     with_column_family(s, cfg, [s] (column_family& cf) {
         const column_definition& r1_col = *s->get_column_definition("r1");
@@ -379,13 +379,12 @@ SEASTAR_TEST_CASE(test_flush_in_the_middle_of_a_scan) {
 
     auto cf_stats = make_lw_shared<::cf_stats>();
 
-    column_family::config cfg;
+    column_family::config cfg = column_family_test_config();
     cfg.enable_disk_reads = true;
     cfg.enable_disk_writes = true;
     cfg.enable_cache = true;
     cfg.enable_incremental_backups = false;
     cfg.cf_stats = &*cf_stats;
-    cfg.large_data_handler = &nop_lp_handler;
 
     return with_column_family(s, cfg, [s](column_family& cf) {
         return seastar::async([s, &cf] {
@@ -459,12 +458,12 @@ SEASTAR_TEST_CASE(test_multiple_memtables_multiple_partitions) {
 
     auto cf_stats = make_lw_shared<::cf_stats>();
 
-    column_family::config cfg;
+    column_family::config cfg = column_family_test_config();
     cfg.enable_disk_reads = false;
     cfg.enable_disk_writes = false;
     cfg.enable_incremental_backups = false;
     cfg.cf_stats = &*cf_stats;
-    cfg.large_data_handler = &nop_lp_handler;
+
     with_column_family(s, cfg, [s] (auto& cf) mutable {
         std::map<int32_t, std::map<int32_t, int32_t>> shadow, result;
 

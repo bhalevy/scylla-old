@@ -72,6 +72,7 @@
 #include "sstables/sstable_set.hh"
 #include "sstables/progress_monitor.hh"
 #include "sstables/version.hh"
+#include "sstables/sstables_manager.hh"
 #include <seastar/core/rwlock.hh>
 #include <seastar/core/shared_future.hh>
 #include <seastar/core/metrics_registration.hh>
@@ -330,6 +331,7 @@ public:
         seastar::scheduling_group streaming_scheduling_group;
         bool enable_metrics_reporting = false;
         db::large_data_handler* large_data_handler;
+        sstables::sstables_manager* sstables_manager;
         db::timeout_semaphore* view_update_concurrency_semaphore;
         size_t view_update_concurrency_semaphore_limit;
         db::data_listeners* data_listeners = nullptr;
@@ -464,6 +466,7 @@ private:
     db::commitlog* _commitlog;
     compaction_manager& _compaction_manager;
     secondary_index::secondary_index_manager _index_manager;
+
     int _compaction_disabled = 0;
     utils::phased_barrier _flush_barrier;
     seastar::gate _streaming_flush_gate;
@@ -913,6 +916,11 @@ public:
         return _config.large_data_handler;
     }
 
+    sstables::sstables_manager& get_sstables_manager() {
+        assert(_config.sstables_manager);
+        return *_config.sstables_manager;
+    }
+
     future<> populate_views(
             std::vector<view_ptr>,
             dht::token base_token,
@@ -1280,6 +1288,8 @@ private:
     std::unique_ptr<db::large_data_handler> _large_data_handler;
     std::unique_ptr<db::large_data_handler> _nop_large_data_handler;
 
+    std::unique_ptr<sstables::sstables_manager> _sstables_manager;
+
     query::result_memory_limiter _result_memory_limiter;
 
     friend db::data_listeners;
@@ -1435,6 +1445,10 @@ public:
 
     db::large_data_handler* get_nop_large_data_handler() const {
         return _nop_large_data_handler.get();
+    }
+
+    sstables::sstables_manager* get_sstables_manager() const {
+        return _sstables_manager.get();
     }
 
     future<> flush_all_memtables();

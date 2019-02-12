@@ -1045,6 +1045,7 @@ SEASTAR_TEST_CASE(compaction_manager_test) {
     cfg.enable_commitlog = false;
     cfg.enable_incremental_backups = false;
     cfg.large_data_handler = &nop_lp_handler;
+    cfg.sstables_manager = &test_sstables_manager;
     auto cl_stats = make_lw_shared<cell_locker_stats>();
     auto tracker = make_lw_shared<cache_tracker>();
     auto cf = make_lw_shared<column_family>(s, cfg, column_family::no_commitlog(), *cm, *cl_stats, *tracker);
