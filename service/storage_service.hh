@@ -61,6 +61,7 @@
 #include "disk-error-handler.hh"
 #include "gms/feature.hh"
 #include <seastar/core/metrics_registration.hh>
+#include "sstables/version.hh"
 
 namespace cql_transport {
     class cql_server;
@@ -301,6 +302,8 @@ private:
     gms::feature _mc_sstable_feature;
     gms::feature _row_level_repair_feature;
     gms::feature _truncation_table;
+
+    sstables::sstable_version_types _sstables_format = sstables::sstable_version_types::ka;
 public:
     void enable_all_features();
 
