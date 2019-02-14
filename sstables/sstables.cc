@@ -3139,7 +3139,8 @@ future<>
 maybe_delete_large_data_entry(shared_sstable sst, const db::large_data_handler& large_data_handler)
 {
     auto toc = sst->toc_filename();
-    return large_data_handler.maybe_delete_large_partitions_entry(*sst).then_wrapped([toc = std::move(toc)] (future<> f) {
+    return large_data_handler.maybe_delete_large_partitions_entry(*sst->get_schema(), sst->get_filename(), sst->data_size())
+            .then_wrapped([toc = std::move(toc)] (future<> f) {
         try {
             f.get();
         } catch (...) {
