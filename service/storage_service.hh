@@ -96,6 +96,20 @@ enum class disk_error { regular, commit };
 struct bind_messaging_port_tag {};
 using bind_messaging_port = bool_class<bind_messaging_port_tag>;
 
+class feature_enabled_listener : public gms::feature::listener {
+    storage_service& _s;
+    distributed<storage_service>* _ss = nullptr;
+    sstables::sstable_version_types _format;
+public:
+    feature_enabled_listener(storage_service& s, sstables::sstable_version_types format)
+        : gms::feature::listener(gms::feature::listener::slot(&feature_enabled_listener::on_enabled, this))
+        , _s(s)
+        , _format(format)
+    { }
+    void start(distributed<storage_service>& ss) { _ss = &ss; }
+    void on_enabled();
+};
+
 /**
  * This abstraction contains the token/identifier of this node
  * on the identifier space. This token gets gossiped around.
@@ -250,6 +264,8 @@ public:
 private:
     mode _operation_mode = mode::STARTING;
     friend std::ostream& operator<<(std::ostream& os, const mode& mode);
+    friend future<> maybe_setup_sstables_format_listeners(distributed<storage_service>&);
+    friend class feature_enabled_listener;
 #if 0
     /* the probability for tracing any particular request, 0 disables tracing and 1 enables for all */
     private double traceProbability = 0.0;
@@ -304,6 +320,8 @@ private:
     gms::feature _truncation_table;
 
     sstables::sstable_version_types _sstables_format = sstables::sstable_version_types::ka;
+    feature_enabled_listener _la_feature_listener;
+    feature_enabled_listener _mc_feature_listener;
 public:
     void enable_all_features();
 
@@ -2313,5 +2331,7 @@ private:
 future<> init_storage_service(distributed<database>& db, sharded<auth::service>& auth_service, sharded<db::system_distributed_keyspace>& sys_dist_ks,
         sharded<db::view::view_update_generator>& view_update_generator, sharded<gms::feature_service>& feature_service);
 future<> deinit_storage_service();
+
+future<> maybe_setup_sstables_format_listeners(distributed<storage_service>& ss);
 
 }

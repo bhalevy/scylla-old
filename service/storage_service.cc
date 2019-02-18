@@ -108,6 +108,8 @@ static const sstring MC_SSTABLE_FEATURE = "MC_SSTABLE_FORMAT";
 static const sstring ROW_LEVEL_REPAIR = "ROW_LEVEL_REPAIR";
 static const sstring TRUNCATION_TABLE = "TRUNCATION_TABLE";
 
+static const sstring SSTABLE_FORMAT_PARAM_NAME = "sstable_format";
+
 distributed<storage_service> _the_storage_service;
 
 
@@ -153,6 +155,8 @@ storage_service::storage_service(distributed<database>& db, sharded<auth::servic
         , _mc_sstable_feature(_feature_service, MC_SSTABLE_FEATURE)
         , _row_level_repair_feature(_feature_service, ROW_LEVEL_REPAIR)
         , _truncation_table(_feature_service, TRUNCATION_TABLE)
+        , _la_feature_listener(*this, sstables::sstable_version_types::la)
+        , _mc_feature_listener(*this, sstables::sstable_version_types::mc)
         , _replicate_action([this] { return do_replicate_to_all_cores(); })
         , _update_pending_ranges_action([this] { return do_update_pending_ranges(); })
         , _sys_dist_ks(sys_dist_ks)
@@ -3322,6 +3326,39 @@ future<> init_storage_service(distributed<database>& db, sharded<auth::service>&
 
 future<> deinit_storage_service() {
     return service::get_storage_service().stop();
+}
+
+void feature_enabled_listener::on_enabled() {
+    disconnect();
+    if (!sstables::is_later(_format, _s._sstables_format)) {
+        return;
+    }
+    _s._sstables_format = _format;
+    db::system_keyspace::set_scylla_local_param(SSTABLE_FORMAT_PARAM_NAME, to_string(_format)).get();
+    if (sstables::is_later(_s._sstables_format, _format)) {
+        return;
+    }
+    _ss->invoke_on_all([this] (storage_service& s) {
+        if (sstables::is_later(_format, s._sstables_format)) {
+            s._sstables_format = _format;
+        }
+    }).get();
+}
+
+future<> maybe_setup_sstables_format_listeners(distributed<storage_service>& ss) {
+    if (sstables::is_latest_supported(service::get_local_storage_service()._sstables_format)) {
+        return make_ready_future<>();
+    }
+    return ss.invoke_on(0, [&ss] (storage_service& s) {
+        if (sstables::is_later(sstables::sstable_version_types::la, s._sstables_format)) {
+            s._la_feature_listener.start(ss);
+            s._la_sstable_feature.when_enabled(s._la_feature_listener);
+        }
+        if (sstables::is_later(sstables::sstable_version_types::mc, s._sstables_format)) {
+            s._mc_feature_listener.start(ss);
+            s._mc_sstable_feature.when_enabled(s._mc_feature_listener);
+        }
+    });
 }
 
 future<> storage_service::set_cql_ready(bool ready) {
