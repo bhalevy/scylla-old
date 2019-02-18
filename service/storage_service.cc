@@ -107,6 +107,7 @@ static const sstring STREAM_WITH_RPC_STREAM = "STREAM_WITH_RPC_STREAM";
 static const sstring MC_SSTABLE_FEATURE = "MC_SSTABLE_FORMAT";
 static const sstring ROW_LEVEL_REPAIR = "ROW_LEVEL_REPAIR";
 static const sstring TRUNCATION_TABLE = "TRUNCATION_TABLE";
+static const sstring UNBOUNDED_RANGE_TOMBSTONES_FEATURE = "UNBOUNDED_RANGE_TOMBSTONES";
 
 static const sstring SSTABLE_FORMAT_PARAM_NAME = "sstable_format";
 
@@ -155,6 +156,7 @@ storage_service::storage_service(distributed<database>& db, sharded<auth::servic
         , _mc_sstable_feature(_feature_service, MC_SSTABLE_FEATURE)
         , _row_level_repair_feature(_feature_service, ROW_LEVEL_REPAIR)
         , _truncation_table(_feature_service, TRUNCATION_TABLE)
+        , _unbounded_range_tombstones_feature(_feature_service, UNBOUNDED_RANGE_TOMBSTONES_FEATURE)
         , _la_feature_listener(*this, sstables::sstable_version_types::la)
         , _mc_feature_listener(*this, sstables::sstable_version_types::mc)
         , _replicate_action([this] { return do_replicate_to_all_cores(); })
@@ -189,6 +191,7 @@ void storage_service::enable_all_features() {
         std::ref(_mc_sstable_feature),
         std::ref(_row_level_repair_feature),
         std::ref(_truncation_table),
+        std::ref(_unbounded_range_tombstones_feature),
     })
     {
         if (features.count(f.name())) {
@@ -290,6 +293,9 @@ std::set<sstring> storage_service::get_config_supported_features_set() {
         if (config.experimental()) {
             // push additional experimental features
         }
+    }
+    if (!sstables::is_later(sstables::sstable_version_types::mc, _sstables_format)) {
+        features.insert(UNBOUNDED_RANGE_TOMBSTONES_FEATURE);
     }
     for (const sstring& s : _disabled_features) {
         features.erase(s);

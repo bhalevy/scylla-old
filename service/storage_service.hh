@@ -319,6 +319,7 @@ private:
     gms::feature _mc_sstable_feature;
     gms::feature _row_level_repair_feature;
     gms::feature _truncation_table;
+    gms::feature _unbounded_range_tombstones_feature;
 
     sstables::sstable_version_types _sstables_format = sstables::sstable_version_types::ka;
     feature_enabled_listener _la_feature_listener;
@@ -2319,6 +2320,9 @@ public:
     }
     const gms::feature& cluster_supports_truncation_table() const {
         return _truncation_table;
+    }
+    bool cluster_supports_unbounded_range_tombstones() const {
+        return bool(_unbounded_range_tombstones_feature);
     }
 private:
     future<> set_cql_ready(bool ready);
