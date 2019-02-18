@@ -3349,6 +3349,13 @@ void feature_enabled_listener::on_enabled() {
             s._sstables_format = _format;
         }
     }).get();
+    if (sstables::is_later(_s._sstables_format, _format)) {
+        return;
+    }
+    if (_format == sstables::sstable_version_types::mc) {
+        gms::get_local_gossiper().add_local_application_state(gms::application_state::SUPPORTED_FEATURES,
+                                                              _s.value_factory.supported_features(_s.get_config_supported_features())).get();
+    }
 }
 
 future<> read_sstables_format(distributed<storage_service>& ss) {
