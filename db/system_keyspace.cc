@@ -1155,7 +1155,9 @@ future<> setup(distributed<database>& db,
                distributed<cql3::query_processor>& qp,
                distributed<service::storage_service>& ss) {
     minimal_setup(db, qp);
-    return setup_version().then([&db] {
+    return service::maybe_setup_sstables_format_listeners(ss).then([] {
+        return setup_version();
+    }).then([&db] {
         return update_schema_version(db.local().get_version());
     }).then([] {
         return init_local_cache();
