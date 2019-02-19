@@ -1139,14 +1139,19 @@ public:
                                    gc_clock::time_point local_deletion_time,
                                    bool is_deleted) override {
         const std::optional<column_id>& column_id = column_info.id;
-        sstlog.trace("mp_row_consumer_m {}: consume_column(id={}, path={}, value={}, ts={}, ttl={}, del_time={}, deleted={})", this,
-            column_id, cell_path, value, timestamp, ttl.count(), local_deletion_time.time_since_epoch().count(), is_deleted);
+        sstlog.debug("mp_row_consumer_m {}: consume_column(id={}, path={}, value={}, ts={}, ttl={}, del_time={}, deleted={}, static_row={}, schema_mismatch={})", this,
+            column_id, cell_path, value, timestamp, ttl.count(), local_deletion_time.time_since_epoch().count(), is_deleted,
+            _inside_static_row, column_info.schema_mismatch);
         check_column_missing_in_current_schema(column_info, timestamp);
         if (!column_id) {
+            sstlog.debug("mp_row_consumer_m {}: consume_column(id={}): column_missing_in_current_schema", this,
+                column_id);
             return proceed::yes;
         }
         const column_definition& column_def = get_column_definition(column_id);
         if (timestamp <= column_def.dropped_at()) {
+            sstlog.debug("mp_row_consumer_m {}: consume_column(id={}): dropped", this,
+                column_id);
             return proceed::yes;
         }
         check_schema_mismatch(column_info, column_def);
@@ -1159,11 +1164,15 @@ public:
                                                     ttl,
                                                     local_deletion_time,
                                                     atomic_cell::collection_member::yes);
+            sstlog.debug("mp_row_consumer_m {}: consume_column(id={}): multi cell found", this,
+                column_id);
             _cm.cells.emplace_back(to_bytes(cell_path), std::move(ac));
         } else {
             auto ac = is_deleted ? atomic_cell::make_dead(timestamp, local_deletion_time)
                                  : make_atomic_cell(*column_def.type, timestamp, value, ttl, local_deletion_time,
                                        atomic_cell::collection_member::no);
+            sstlog.debug("mp_row_consumer_m {}: consume_column(id={}): regular cell found", this,
+                column_id);
             _cells.push_back({*column_id, atomic_cell_or_collection(std::move(ac))});
         }
         return proceed::yes;
@@ -1276,9 +1285,11 @@ public:
                 }
                 switch (action) {
                 case mutation_fragment_filter::result::emit:
+                    sstlog.debug("mp_row_consumer_m {}: consume_row_end(emit)", this);
                     _reader->push_mutation_fragment(std::move(_in_progress_static_row));
                     break;
                 case mutation_fragment_filter::result::ignore:
+                    sstlog.debug("mp_row_consumer_m {}: consume_row_end(ignore)", this);
                     break;
                 case mutation_fragment_filter::result::store_and_finish:
                     // static row is always either emited or ignored.
