@@ -3345,6 +3345,15 @@ void feature_enabled_listener::on_enabled() {
     }).get();
 }
 
+future<> read_sstables_format(distributed<storage_service>& ss) {
+    return db::system_keyspace::get_scylla_local_param(SSTABLE_FORMAT_PARAM_NAME).then([&ss] (std::optional<sstring> format_opt) {
+        sstables::sstable_version_types format = sstables::from_string(format_opt.value_or("ka"));
+        return ss.invoke_on_all([format] (storage_service& s) {
+            s._sstables_format = format;
+        });
+    });
+}
+
 future<> maybe_setup_sstables_format_listeners(distributed<storage_service>& ss) {
     if (sstables::is_latest_supported(service::get_local_storage_service()._sstables_format)) {
         return make_ready_future<>();
