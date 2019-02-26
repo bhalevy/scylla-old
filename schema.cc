@@ -115,6 +115,7 @@ v3_columns v3_columns::from_v2_schema(const schema& s) {
     data_type static_column_name_type = utf8_type;
     std::vector<column_definition> cols;
 
+    slog.trace("from_v2_schema {}.{}: is_static_compact_table {}", s.ks_name(), s.cf_name(), s.is_static_compact_table());
     if (s.is_static_compact_table()) {
         if (s.has_static_columns()) {
             slog.warn("v2 static compact table should not have static columns: {}.{}", s.ks_name(), s.cf_name());
@@ -126,6 +127,7 @@ v3_columns v3_columns::from_v2_schema(const schema& s) {
         for (auto& c : s.all_columns()) {
             // Note that for "static" no-clustering compact storage we use static for the defined columns
             if (c.kind == column_kind::regular_column) {
+                slog.trace("static_compact_table {}.{}: regular column {} converted to static.", s.ks_name(), s.cf_name(), c.id);
                 auto new_def = c;
                 new_def.kind = column_kind::static_column;
                 cols.push_back(new_def);
@@ -553,6 +555,15 @@ std::ostream& operator<<(std::ostream& os, const schema& s) {
         os << cdef;
     }
     os << "]";
+    os << ",v3_columnMetadata=[";
+    n = 0;
+    for (auto& cdef : s.v3().all_columns()) {
+        if (n++ != 0) {
+            os << ", ";
+        }
+        os << cdef;
+    }
+    os << "]";
     os << ",compactionStrategyClass=class org.apache.cassandra.db.compaction." << sstables::compaction_strategy::name(s._raw._compaction_strategy);
     os << ",compactionStrategyOptions={";
     n = 0;
@@ -839,6 +850,9 @@ void schema_builder::prepare_dense_schema(schema::raw_schema& raw) {
         if (is_dense) {
             auto regular_cols = count_kind(column_kind::regular_column);
             // In Origin, dense CFs always have at least one regular column
+            slog.trace("schema_builder::prepare_dense_schema: is_dense={} is_compound={} regular_cols={}",
+                    _version, is_dense, is_compound, regular_cols);
+
             if (regular_cols == 0) {
                 raw._columns.emplace_back(to_bytes(names.compact_value_name()),
                                 empty_type,
@@ -910,6 +924,11 @@ schema_ptr schema_builder::build() {
             }
         }
     }
+
+    slog.trace("schema_builder::build: version={} is_counter={} compact_storage={} is_dense={} is_compound={}",
+            new_raw._version, new_raw._is_counter,
+            _compact_storage ? (*_compact_storage == compact_storage::yes ? "yes" : "no") : "unset",
+            new_raw._is_dense, new_raw._is_compound);
 
     prepare_dense_schema(new_raw);
     return make_lw_shared<schema>(schema(new_raw, _view_info));
