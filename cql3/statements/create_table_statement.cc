@@ -311,11 +311,12 @@ std::unique_ptr<prepared_statement> create_table_statement::raw_statement::prepa
     if (!_static_columns.empty()) {
         // Only CQL3 tables can have static columns
         if (_properties.use_compact_storage()) {
-            throw exceptions::invalid_request_exception("Static columns are not supported in COMPACT STORAGE tables");
+            //throw exceptions::invalid_request_exception("Static columns are not supported in COMPACT STORAGE tables");
+            ctslog.warn("Static columns are not supported in COMPACT STORAGE tables");
         }
         // Static columns only make sense if we have at least one clustering column. Otherwise everything is static anyway
         if (_column_aliases.empty()) {
-            throw exceptions::invalid_request_exception("Static columns are only useful (and thus allowed) if the table has at least one clustering column");
+            ctslog.warn("Static columns are only useful (and thus allowed) if the table has at least one clustering column");
         }
     }
 
@@ -342,12 +343,28 @@ std::unique_ptr<prepared_statement> create_table_statement::raw_statement::prepa
             stmt.columns.remove(lastEntry.getKey());
 #endif
         }
+#ifndef notyet
     } else {
         // For compact, we are in the "static" case, so we need at least one column defined. For non-compact however, having
         // just the PK is fine since we have CQL3 row marker.
         if (_properties.use_compact_storage() && stmt->_columns.empty()) {
             throw exceptions::invalid_request_exception("COMPACT STORAGE with non-composite PRIMARY KEY require one column not part of the PRIMARY KEY, none given");
         }
+#else
+    } else if (_properties.use_compact_storage()) {
+        // For compact, we are in the "static" case, so we need at least one column defined. For non-compact however, having
+        // just the PK is fine since we have CQL3 row marker.
+        if (stmt->_columns.empty()) {
+            throw exceptions::invalid_request_exception("COMPACT STORAGE with non-composite PRIMARY KEY require one column not part of the PRIMARY KEY, none given");
+        }
+        ctslog.info("compact storage columns.size()={}", stmt->_columns.size());
+        for (auto&& it : stmt->_columns) {
+            shared_ptr<column_identifier> type = it.first;
+            ctslog.info("compact storage column={}", *type);
+//            _static_columns.emplace(type);
+        }
+//        stmt->_columns.clear();
+#endif
 #if 0
         // There is no way to insert/access a column that is not defined for non-compact storage, so
         // the actual validator don't matter much (except that we want to recognize counter CF as limitation apply to them).
