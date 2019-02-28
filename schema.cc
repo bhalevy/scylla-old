@@ -109,6 +109,8 @@ v3_columns::v3_columns(std::vector<column_definition> cols, bool is_dense, bool 
     }
 }
 
+logging::logger slog("schema");
+
 v3_columns v3_columns::from_v2_schema(const schema& s) {
     data_type static_column_name_type = utf8_type;
     std::vector<column_definition> cols;
