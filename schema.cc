@@ -117,12 +117,10 @@ v3_columns v3_columns::from_v2_schema(const schema& s) {
 
     if (s.is_static_compact_table()) {
         if (s.has_static_columns()) {
-            throw std::runtime_error(
-                format("v2 static compact table should not have static columns: {}.{}", s.ks_name(), s.cf_name()));
+            slog.warn("v2 static compact table should not have static columns: {}.{}", s.ks_name(), s.cf_name());
         }
         if (s.clustering_key_size()) {
-            throw std::runtime_error(
-                format("v2 static compact table should not have clustering columns: {}.{}", s.ks_name(), s.cf_name()));
+            slog.warn("v2 static compact table should not have clustering columns: {}.{}", s.ks_name(), s.cf_name());
         }
         static_column_name_type = s.regular_column_name_type();
         for (auto& c : s.all_columns()) {
