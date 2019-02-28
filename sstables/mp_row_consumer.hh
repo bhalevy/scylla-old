@@ -1270,6 +1270,10 @@ public:
             _inside_static_row = false;
             if (!_in_progress_static_row.empty()) {
                 auto action = _mf_filter->apply(_in_progress_static_row);
+                if (action == mutation_fragment_filter::result::ignore) {
+                    sstlog.debug("mp_row_consumer_m {}: overriding ignore!", this);
+                    action = mutation_fragment_filter::result::emit;
+                }
                 switch (action) {
                 case mutation_fragment_filter::result::emit:
                     _reader->push_mutation_fragment(std::move(_in_progress_static_row));
