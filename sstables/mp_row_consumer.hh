@@ -1171,8 +1171,13 @@ public:
             auto ac = is_deleted ? atomic_cell::make_dead(timestamp, local_deletion_time)
                                  : make_atomic_cell(*column_def.type, timestamp, value, ttl, local_deletion_time,
                                        atomic_cell::collection_member::no);
-            sstlog.debug("mp_row_consumer_m {}: consume_column(id={}): regular cell found", this,
-                column_id);
+            sstlog.debug("mp_row_consumer_m {}: consume_column(id={}): regular cell found: is_deleted={} kind={} type={}", this,
+                column_id, is_deleted,
+                column_def.kind == column_kind::partition_key ? "partition_key" :
+                column_def.kind == column_kind::clustering_key ? "clustering_key" :
+                column_def.kind == column_kind::static_column ? "static" :
+                column_def.kind == column_kind::regular_column ? "regular" : "unknown",
+                column_def.type->name());
             _cells.push_back({*column_id, atomic_cell_or_collection(std::move(ac))});
         }
         return proceed::yes;

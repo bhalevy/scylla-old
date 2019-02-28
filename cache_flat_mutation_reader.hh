@@ -175,6 +175,7 @@ public:
 
 inline
 future<> cache_flat_mutation_reader::process_static_row(db::timeout_clock::time_point timeout) {
+    clogger.trace("csm {}: static_row_continuous={}", this, _snp->static_row_continuous());
     if (_snp->static_row_continuous()) {
         _read_context->cache().on_row_hit();
         static_row sr = _lsa_manager.run_in_read_section([this] {
@@ -649,6 +650,7 @@ void cache_flat_mutation_reader::maybe_add_to_cache(const static_row& sr) {
             _snp->version()->partition().static_row().apply(*_schema, column_kind::static_column, sr.cells());
         });
     } else {
+        clogger.trace("csm {}: cannot populate({})", this, static_row::printer(*_schema, sr));
         _read_context->cache().on_mispopulate();
     }
 }
