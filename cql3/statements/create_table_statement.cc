@@ -182,6 +182,8 @@ create_table_statement::raw_statement::raw_statement(::shared_ptr<cf_name> name,
     , _if_not_exists{if_not_exists}
 { }
 
+logging::logger ctslog("create_table_statement");
+
 std::unique_ptr<prepared_statement> create_table_statement::raw_statement::prepare(database& db, cql_stats& stats) {
     // Column family name
     const sstring& cf_name = _cf_name->get_column_family();
