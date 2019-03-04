@@ -26,13 +26,12 @@
 #include "cell_locking.hh"
 #include "mutation_reader.hh"
 #include "tests/sstable_utils.hh"
+#include "tests/test_services.hh"
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics.hpp>
 #include <boost/range/irange.hpp>
 
 using namespace sstables;
-
-static db::nop_large_data_handler nop_lp_handler;
 
 class perf_sstable_test_env {
     test_env _env;
