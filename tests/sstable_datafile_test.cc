@@ -71,8 +71,6 @@ using namespace sstables;
 static const sstring some_keyspace("ks");
 static const sstring some_column_family("cf");
 
-static db::nop_large_data_handler nop_lp_handler;
-
 atomic_cell make_atomic_cell(data_type dt, bytes_view value, uint32_t ttl = 0, uint32_t expiration = 0) {
     if (ttl) {
         return atomic_cell::make_live(*dt, 0, value,
