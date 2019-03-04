@@ -25,18 +25,22 @@
 
 #include "sstables/sstables.hh"
 #include "tests/tmpdir.hh"
+#include "tests/test_services.hh"
 
 namespace sstables {
 
 class test_env {
+    db::large_data_handler* _large_data_handler;
     sstables_manager _mgr;
 public:
-    test_env() = default;
+    test_env(db::large_data_handler* large_data_handler = &nop_lp_handler)
+        : _large_data_handler(large_data_handler)
+    { }
 
     shared_sstable make_sstable(schema_ptr schema, sstring dir, unsigned long generation,
             sstable::version_types v, sstable::format_types f = sstable::format_types::big,
             size_t buffer_size = default_sstable_buffer_size(), gc_clock::time_point now = gc_clock::now()) {
-        return _mgr.make_sstable(std::move(schema), dir, generation, v, f, now, default_io_error_handler_gen(), buffer_size);
+        return _mgr.make_sstable(std::move(schema), dir, generation, v, f, *_large_data_handler, now, default_io_error_handler_gen(), buffer_size);
     }
 
     future<shared_sstable> reusable_sst(schema_ptr schema, sstring dir, unsigned long generation,
