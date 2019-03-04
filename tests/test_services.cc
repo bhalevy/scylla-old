@@ -44,7 +44,6 @@ static const sstring some_column_family("cf");
 
 column_family::config column_family_test_config() {
     column_family::config cfg;
-    cfg.large_data_handler = &nop_lp_handler;
     cfg.sstables_manager = &test_sstables_manager;
     return cfg;
 }

@@ -44,7 +44,7 @@ public:
 };
 
 static db::nop_large_data_handler nop_lp_handler;
-static sstables::sstables_manager test_sstables_manager;
+static sstables::sstables_manager test_sstables_manager(nop_lp_handler);
 
 column_family::config column_family_test_config();
 
