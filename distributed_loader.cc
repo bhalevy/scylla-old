@@ -429,24 +429,31 @@ void distributed_loader::reshard(distributed<database>& db, sstring ks_name, sst
 
 future<> distributed_loader::load_new_sstables(distributed<database>& db, distributed<db::view::view_update_generator>& view_update_generator,
         sstring ks, sstring cf, std::vector<sstables::entry_descriptor> new_tables) {
-    return parallel_for_each(new_tables, [&db] (auto comps) {
-        auto cf_sstable_open = [comps] (column_family& cf, sstables::foreign_sstable_open_info info) {
+  // sstables that have been opened but not loaded yet, that's because refresh
+  // needs to load all opened sstables atomically, and now, we open a sstable
+  // in all shards at the same time, which makes it hard to store all sstables
+  // we need to load later on for all shards.
+  std::vector<sstables::shared_sstable> ssts;
+  ssts.reserve(new_tables.size());
+  return do_with(std::move(ssts), [&] (auto& sstables_opened_but_not_loaded) {
+    return parallel_for_each(new_tables, [&db, &sstables_opened_but_not_loaded] (auto comps) {
+        auto cf_sstable_open = [comps, &sstables_opened_but_not_loaded] (column_family& cf, sstables::foreign_sstable_open_info info) {
             auto f = cf.open_sstable(std::move(info), comps.sstdir, comps.generation, comps.version, comps.format);
-            return f.then([&cf] (sstables::shared_sstable sst) mutable {
+            return f.then([&sstables_opened_but_not_loaded] (sstables::shared_sstable sst) mutable {
                 if (sst) {
-                    cf._sstables_opened_but_not_loaded.push_back(sst);
+                    sstables_opened_but_not_loaded.emplace_back(sst);
                 }
                 return make_ready_future<>();
             });
         };
         return distributed_loader::open_sstable(db, comps, cf_sstable_open, service::get_local_compaction_priority());
-    }).then([&db, &view_update_generator, ks, cf] {
-        return db.invoke_on_all([&view_update_generator, ks = std::move(ks), cfname = std::move(cf)] (database& db) {
+    }).then([&db, &view_update_generator, ks, cf, &sstables_opened_but_not_loaded] {
+        return db.invoke_on_all([&view_update_generator, &sstables_opened_but_not_loaded, ks = std::move(ks), cfname = std::move(cf)] (database& db) {
             auto& cf = db.find_column_family(ks, cfname);
-            return cf.get_row_cache().invalidate([&view_update_generator, &cf] () noexcept {
+            return cf.get_row_cache().invalidate([&view_update_generator, &cf, &sstables_opened_but_not_loaded] () noexcept {
                 // FIXME: this is not really noexcept, but we need to provide strong exception guarantees.
                 // atomically load all opened sstables into column family.
-                for (auto& sst : cf._sstables_opened_but_not_loaded) {
+                for (auto& sst : sstables_opened_but_not_loaded) {
                     try {
                         cf.load_sstable(sst, true);
                     } catch(...) {
@@ -457,7 +464,6 @@ future<> distributed_loader::load_new_sstables(distributed<database>& db, distri
                         view_update_generator.local().register_staging_sstable(sst, cf.shared_from_this());
                     }
                 }
-                cf._sstables_opened_but_not_loaded.clear();
                 cf.trigger_compaction();
             });
         });
@@ -466,6 +472,7 @@ future<> distributed_loader::load_new_sstables(distributed<database>& db, distri
             distributed_loader::reshard(db, std::move(ks), std::move(cf));
         });
     });
+  });
 }
 
 future<sstables::entry_descriptor> distributed_loader::probe_file(distributed<database>& db, sstring sstdir, sstring fname) {
