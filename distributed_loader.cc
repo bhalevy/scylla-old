@@ -436,7 +436,7 @@ future<> distributed_loader::load_new_sstables(distributed<database>& db, distri
     std::vector<sstables::shared_sstable> ssts;
     ssts.reserve(new_tables.size());
     return do_with(std::move(ssts), [&] (auto& sstables_opened_but_not_loaded) {
-        return parallel_for_each(new_tables, [&db, &sstables_opened_but_not_loaded] (auto comps) {
+        return parallel_for_each(new_tables, [&] (auto comps) {
             auto cf_sstable_open = [comps, &sstables_opened_but_not_loaded] (column_family& cf, sstables::foreign_sstable_open_info info) {
                 auto f = cf.open_sstable(std::move(info), comps.sstdir, comps.generation, comps.version, comps.format);
                 return f.then([&sstables_opened_but_not_loaded] (sstables::shared_sstable sst) mutable {
@@ -446,8 +446,16 @@ future<> distributed_loader::load_new_sstables(distributed<database>& db, distri
                     return make_ready_future<>();
                 });
             };
-            return distributed_loader::open_sstable(db, comps, cf_sstable_open, service::get_local_compaction_priority());
-        }).then([&db, &view_update_generator, ks, cf, &sstables_opened_but_not_loaded] {
+            return distributed_loader::open_sstable(db, comps, cf_sstable_open, service::get_local_compaction_priority())
+                .handle_exception([comps, ks, cf] (std::exception_ptr ep) {
+                    auto name = sstables::sstable::filename(comps.sstdir, ks, cf, comps.version, comps.generation, comps.format, sstables::component_type::TOC);
+                    dblog.error("Failed to open {}: {}", name, ep);
+                    return make_exception_future<>(ep);
+                });
+        }).then_wrapped([&db, &view_update_generator, ks, cf, &sstables_opened_but_not_loaded] (future<> f) {
+            if (f.failed()) {
+                return f;
+            }
             return db.invoke_on_all([&view_update_generator, &sstables_opened_but_not_loaded, ks = std::move(ks), cfname = std::move(cf)] (database& db) {
                 auto& cf = db.find_column_family(ks, cfname);
                 return cf.get_row_cache().invalidate([&view_update_generator, &cf, &sstables_opened_but_not_loaded] () noexcept {
