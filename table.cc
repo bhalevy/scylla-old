@@ -620,6 +620,7 @@ void table::load_sstable(sstables::shared_sstable& sst, bool reset_level) {
         auto error = "Reading non-Scylla SSTables containing counters is not supported.";
         if (_config.enable_dangerous_direct_import_of_cassandra_counters) {
             tlogger.info("{} But trying to continue on user's request", error);
+            abort();
         } else {
             throw std::runtime_error(fmt::format(FMT_STRING("{} Use sstableloader instead"), error));
         }

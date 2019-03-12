@@ -226,6 +226,7 @@ distributed_loader::flush_upload_dir(distributed<database>& db, distributed<db::
                         sstring error = "Direct loading non-Scylla SSTables containing counters is not supported.";
                         if (db.get_config().enable_dangerous_direct_import_of_cassandra_counters()) {
                             dblog.info("{} But trying to continue on user's request.", error);
+                            abort();
                         } else {
                             throw std::runtime_error(fmt::format("{} Use sstableloader instead.", error));
                         }
