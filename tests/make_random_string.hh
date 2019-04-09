@@ -23,17 +23,22 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
-#include "seastarx.hh"
-#include <random>
+#include <seastar/testing/random_utils.hh>
+
+#include "bytes.hh"
+
+using namespace seastar;
 
 inline
-sstring make_random_string(size_t size) {
-    static thread_local std::default_random_engine rng;
-    std::uniform_int_distribution<char> dist;
+sstring make_random_string(size_t size = 1024) {
     sstring str(sstring::initialized_later(), size);
-    for (auto&& b : str) {
-        b = dist(rng);
-    }
-    return str;
+    boost::generate(str, [] { return testing::random.get_int<sstring::value_type>('a', 'z'); });
+    return std::move(str);
+}
+
+inline
+bytes make_random_bytes(size_t size = 128 * 1024) {
+    bytes b(bytes::initialized_later(), size);
+    boost::generate(b, [] { return testing::random.get_int<bytes::value_type>(); });
+    return std::move(b);
 }

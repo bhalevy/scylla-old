@@ -21,10 +21,9 @@
 
 #include <seastar/core/thread.hh>
 #include <seastar/testing/thread_test_case.hh>
-
+#include <seastar/testing/random_utils.hh>
+#include "tests/make_random_string.hh"
 #include "utils/fragmented_temporary_buffer.hh"
-
-#include "random-utils.hh"
 
 struct {
     [[noreturn]]
@@ -385,9 +384,9 @@ SEASTAR_THREAD_TEST_CASE(test_read_fragmented_buffer) {
                                   bytes>;
 
     auto generate = [] (size_t n) {
-        auto prefix = tests::random::get_bytes();
-        auto data = tests::random::get_bytes(n);
-        auto suffix = tests::random::get_bytes();
+        auto prefix = make_random_bytes();
+        auto data = make_random_bytes(n);
+        auto suffix = make_random_bytes();
 
         auto linear = bytes(bytes::initialized_later(), prefix.size() + n + suffix.size());
         auto dst = linear.begin();
@@ -417,7 +416,7 @@ SEASTAR_THREAD_TEST_CASE(test_read_fragmented_buffer) {
     test_cases.emplace_back(generate(1024));
     test_cases.emplace_back(generate(512 * 1024));
     for (auto i = 0; i < 16; i++) {
-        test_cases.emplace_back(generate(tests::random::get_int(16, 16 * 1024)));
+        test_cases.emplace_back(generate(seastar::testing::random.get_int(16, 16 * 1024)));
     }
 
     for (auto&& [ buffers, expected_prefix, expected_data, expected_suffix ] : test_cases) {

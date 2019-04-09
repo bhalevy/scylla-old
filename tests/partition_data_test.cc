@@ -19,20 +19,18 @@
  * along with Scylla.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define BOOST_TEST_MODULE partition_data
-#include <boost/test/unit_test.hpp>
-
-#include <random>
+#include <seastar/testing/thread_test_case.hh>
+#include <seastar/testing/random_utils.hh>
+#include "tests/make_random_string.hh"
 
 #include <boost/range/irange.hpp>
 #include <boost/range/algorithm/generate.hpp>
 
 #include "data/cell.hh"
 
-#include "random-utils.hh"
 #include "disk-error-handler.hh"
 
-BOOST_AUTO_TEST_CASE(test_atomic_cell) {
+SEASTAR_THREAD_TEST_CASE(test_atomic_cell) {
     struct test_case {
         bool live;
         bool fixed_size;
@@ -45,15 +43,15 @@ BOOST_AUTO_TEST_CASE(test_atomic_cell) {
         // Live, fixed-size, empty cell
         { true, true, bytes(), false },
         // Live, fixed-size cell
-        { true, true, tests::random::get_bytes(data::cell::maximum_internal_storage_length / 2), false, false },
+        { true, true, make_random_bytes(data::cell::maximum_internal_storage_length / 2), false, false },
         // Live, variable-size (small), cell
-        { true, false, tests::random::get_bytes(data::cell::maximum_internal_storage_length / 2), false, false },
+        { true, false, make_random_bytes(data::cell::maximum_internal_storage_length / 2), false, false },
         // Live, variable-size (large), cell
-        { true, false, tests::random::get_bytes(data::cell::maximum_external_chunk_length * 5), false, false },
+        { true, false, make_random_bytes(data::cell::maximum_external_chunk_length * 5), false, false },
         // Live, variable-size, empty cell
         { true, false, bytes(), false, false },
         // Live, expiring, variable-size cell
-        { true, false, tests::random::get_bytes(data::cell::maximum_internal_storage_length / 2), true, false },
+        { true, false, make_random_bytes(data::cell::maximum_internal_storage_length / 2), true, false },
         // Dead cell
         { false, false, bytes(), false, false },
         // Counter update cell
@@ -62,7 +60,7 @@ BOOST_AUTO_TEST_CASE(test_atomic_cell) {
 
     for (auto tc : cases) {
         auto [live, fixed_size, value, expiring, counter_update] = tc;
-        auto timestamp = tests::random::get_int<api::timestamp_type>();
+        auto timestamp = seastar::testing::random.get_int<api::timestamp_type>();
         auto ti = [&] {
             if (fixed_size) {
                 return data::type_info::make_fixed_size(value.size());
@@ -70,10 +68,10 @@ BOOST_AUTO_TEST_CASE(test_atomic_cell) {
                 return data::type_info::make_variable_size();
             }
         }();
-        auto ttl = gc_clock::duration(tests::random::get_int<int32_t>(1, std::numeric_limits<int32_t>::max()));
-        auto expiry_time = gc_clock::time_point(gc_clock::duration(tests::random::get_int<int32_t>(1, std::numeric_limits<int32_t>::max())));
+        auto ttl = gc_clock::duration(seastar::testing::random.get_int<int32_t>(1, std::numeric_limits<int32_t>::max()));
+        auto expiry_time = gc_clock::time_point(gc_clock::duration(seastar::testing::random.get_int<int32_t>(1, std::numeric_limits<int32_t>::max())));
         auto deletion_time = expiry_time;
-        auto counter_update_value = tests::random::get_int<int64_t>();
+        auto counter_update_value = seastar::testing::random.get_int<int64_t>();
 
         std::optional<imr::alloc::object_allocator> allocator;
         allocator.emplace();

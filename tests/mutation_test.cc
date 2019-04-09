@@ -45,6 +45,8 @@
 
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
+#include <seastar/testing/random_utils.hh>
+#include "tests/make_random_string.hh"
 #include "tests/mutation_assertions.hh"
 #include "tests/result_set_assertions.hh"
 #include "tests/test_services.hh"
@@ -54,7 +56,6 @@
 #include "cell_locking.hh"
 #include "flat_mutation_reader_assertions.hh"
 #include "service/storage_proxy.hh"
-#include "random-utils.hh"
 #include "simple_schema.hh"
 #include "types/map.hh"
 #include "types/list.hh"
@@ -1666,13 +1667,13 @@ SEASTAR_THREAD_TEST_CASE(test_external_memory_usage) {
 
         auto m = mutation(s.schema(), s.make_pkey("pk"));
 
-        auto row_count = tests::random::get_int(1, 16);
+        auto row_count = seastar::testing::random.get_int(1, 16);
         for (auto i = 0; i < row_count; i++) {
-            auto ck_value = to_hex(tests::random::get_bytes(tests::random::get_int(1023) + 1));
+            auto ck_value = to_hex(make_random_bytes(seastar::testing::random.get_int(1023) + 1));
             data_size += ck_value.size();
             auto ck = s.make_ckey(ck_value);
 
-            auto value = to_hex(tests::random::get_bytes(tests::random::get_int(128 * 1024)));
+            auto value = to_hex(make_random_bytes(seastar::testing::random.get_int(128 * 1024)));
             data_size += value.size();
             s.add_row(m, ck, value);
         }

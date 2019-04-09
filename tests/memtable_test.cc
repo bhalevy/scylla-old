@@ -26,6 +26,7 @@
 #include "utils/UUID_gen.hh"
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
+#include <seastar/testing/random_utils.hh>
 #include "schema_builder.hh"
 
 #include <seastar/core/thread.hh>
@@ -35,7 +36,6 @@
 #include "flat_mutation_reader_assertions.hh"
 #include "flat_mutation_reader.hh"
 #include "data_model.hh"
-#include "random-utils.hh"
 
 static api::timestamp_type next_timestamp() {
     static thread_local api::timestamp_type next_timestamp = 1;
@@ -566,7 +566,7 @@ SEASTAR_TEST_CASE(test_hash_is_cached) {
 
 SEASTAR_THREAD_TEST_CASE(test_collecting_encoding_stats) {
     auto random_int32_value = [] {
-        return int32_type->decompose(tests::random::get_int<int32_t>());
+        return int32_type->decompose(seastar::testing::random.get_int<int32_t>());
     };
 
     auto now = gc_clock::now();

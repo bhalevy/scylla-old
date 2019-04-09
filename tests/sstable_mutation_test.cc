@@ -24,6 +24,7 @@
 #include <seastar/net/inet_address.hh>
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
+#include <seastar/testing/random_utils.hh>
 #include "sstable_test.hh"
 #include "sstables/key.hh"
 #include <seastar/core/do_with.hh>
@@ -44,7 +45,6 @@
 #include "tests/sstable_utils.hh"
 #include "tests/make_random_string.hh"
 #include "data_model.hh"
-#include "random-utils.hh"
 
 using namespace sstables;
 using namespace std::chrono_literals;
@@ -1496,7 +1496,7 @@ SEASTAR_THREAD_TEST_CASE(test_reading_serialization_header) {
     auto wait_bg = seastar::defer([] { sstables::await_background_jobs().get(); });
 
     auto random_int32_value = [] {
-        return int32_type->decompose(tests::random::get_int<int32_t>());
+        return int32_type->decompose(seastar::testing::random.get_int<int32_t>());
     };
 
     auto td = tests::data_model::table_description({ { "pk", int32_type } }, { { "ck", utf8_type } });

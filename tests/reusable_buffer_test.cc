@@ -19,21 +19,19 @@
  * along with Scylla.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define BOOST_TEST_MODULE reusable_buffer
-#include <boost/test/unit_test.hpp>
-
+#include <seastar/testing/thread_test_case.hh>
+#include <seastar/testing/random_utils.hh>
+#include "tests/make_random_string.hh"
 #include "utils/reusable_buffer.hh"
 
 #include <boost/range/algorithm/copy.hpp>
 
-#include "random-utils.hh"
-
-BOOST_AUTO_TEST_CASE(test_get_linearized_view) {
+SEASTAR_THREAD_TEST_CASE(test_get_linearized_view) {
     utils::reusable_buffer buffer;
 
     auto test = [&buffer] (size_t n) {
         BOOST_TEST_MESSAGE("Testing buffer size " << n);
-        auto original = tests::random::get_bytes(n);
+        auto original = make_random_bytes(n);
 
         bytes_ostream bo;
         bo.write(original);
@@ -67,12 +65,12 @@ BOOST_AUTO_TEST_CASE(test_get_linearized_view) {
         test(100'000);
 
         for (auto i = 0; i < 25; i++) {
-            test(tests::random::get_int(512 * 1024));
+            test(seastar::testing::random.get_int(512 * 1024));
         }
     }
 }
 
-BOOST_AUTO_TEST_CASE(test_make_buffer) {
+SEASTAR_THREAD_TEST_CASE(test_make_buffer) {
     utils::reusable_buffer buffer;
 
     auto test = [&buffer] (size_t maximum, size_t actual) {
@@ -80,7 +78,7 @@ BOOST_AUTO_TEST_CASE(test_make_buffer) {
         
         bytes original;
         auto make_buffer_fn = [&] (bytes_mutable_view view) {
-            original = tests::random::get_bytes(actual);
+            original = make_random_bytes(actual);
             BOOST_REQUIRE_EQUAL(maximum, view.size());
             BOOST_REQUIRE_LE(actual, view.size());
             boost::range::copy(original, view.begin());
@@ -108,8 +106,8 @@ BOOST_AUTO_TEST_CASE(test_make_buffer) {
         test(400'000, 100'000);
 
         for (auto i = 0; i < 25; i++) {
-            auto a = tests::random::get_int(512 * 1024);
-            auto b = tests::random::get_int(512 * 1024);
+            auto a = seastar::testing::random.get_int(512 * 1024);
+            auto b = seastar::testing::random.get_int(512 * 1024);
             test(std::max(a, b), std::min(a, b));
         }
     }

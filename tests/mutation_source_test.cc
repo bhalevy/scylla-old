@@ -30,7 +30,7 @@
 #include "flat_mutation_reader_assertions.hh"
 #include "mutation_query.hh"
 #include "mutation_rebuilder.hh"
-#include "random-utils.hh"
+#include <seastar/testing/random_utils.hh>
 #include "cql3/cql3_type.hh"
 #include "make_random_string.hh"
 #include "data_model.hh"
@@ -1692,8 +1692,8 @@ public:
     explicit impl(generate_counters counters, local_shard_only lso = local_shard_only::yes) : _generate_counters(counters), _local_shard_only(lso) {
         std::random_device rd;
         // In case of errors, replace the seed with a fixed value to get a deterministic run.
-        auto seed = rd();
-        std::cout << "Random seed: " << seed << "\n";
+        auto seed = seastar::testing::random.get_int<uint32_t>();
+        std::cout << "random_mutation_generator Random seed: " << seed << "\n";
         _gen = std::mt19937(seed);
 
         _schema = make_schema();
@@ -2003,7 +2003,7 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
         { int32_type, bytes_type, long_type });
 
     auto random_int32_value = [] {
-        return int32_type->decompose(tests::random::get_int<int32_t>());
+        return int32_type->decompose(seastar::testing::random.get_int<int32_t>());
     };
     int32_t key_id = 0;
     auto random_partition_key = [&] () -> tests::data_model::mutation_description::key {
@@ -2011,8 +2011,8 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
     };
     auto random_clustering_key = [&] () -> tests::data_model::mutation_description::key {
         return {
-            utf8_type->decompose(tests::random::get_sstring()),
-            utf8_type->decompose(tests::random::get_sstring()),
+            utf8_type->decompose(make_random_string()),
+            utf8_type->decompose(make_random_string()),
             utf8_type->decompose(format("{}", key_id++)),
         };
     };
@@ -2025,14 +2025,14 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
     };
     auto random_frozen_map = [&] {
         return map_of_int_to_int->decompose(make_map_value(map_of_int_to_int, map_type_impl::native_type({
-            { 1, tests::random::get_int<int32_t>() },
-            { 2, tests::random::get_int<int32_t>() },
-            { 3, tests::random::get_int<int32_t>() },
+            { 1, seastar::testing::random.get_int<int32_t>() },
+            { 2, seastar::testing::random.get_int<int32_t>() },
+            { 3, seastar::testing::random.get_int<int32_t>() },
         })));
     };
     auto random_tuple = [&] {
         return tuple_of_int_long->decompose(make_tuple_value(tuple_of_int_long, tuple_type_impl::native_type{
-            tests::random::get_int<int32_t>(), tests::random::get_int<int64_t>(),
+            seastar::testing::random.get_int<int32_t>(), seastar::testing::random.get_int<int64_t>(),
         }));
     };
     auto random_set = [&] () -> tests::data_model::mutation_description::collection {
@@ -2044,8 +2044,8 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
     };
     auto random_udt = [&] {
         return udt_int_text->decompose(make_user_value(udt_int_text, user_type_impl::native_type{
-            tests::random::get_int<int32_t>(),
-            tests::random::get_sstring(),
+            seastar::testing::random.get_int<int32_t>(),
+            make_random_string(),
         }));
     };
 

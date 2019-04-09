@@ -20,15 +20,14 @@
  */
 
 #include <seastar/testing/thread_test_case.hh>
-
+#include <seastar/testing/random_utils.hh>
+#include "tests/make_random_string.hh"
 #include "transport/request.hh"
 #include "transport/response.hh"
 
-#include "random-utils.hh"
-
 SEASTAR_THREAD_TEST_CASE(test_response_request_reader) {
-    auto stream_id = tests::random::get_int<int16_t>();
-    auto opcode = tests::random::get_int<uint8_t>(uint8_t(cql_transport::cql_binary_opcode::AUTH_SUCCESS));
+    auto stream_id = seastar::testing::random.get_int<int16_t>();
+    auto opcode = seastar::testing::random.get_int<uint8_t>(uint8_t(cql_transport::cql_binary_opcode::AUTH_SUCCESS));
     auto res = cql_transport::response(stream_id, cql_transport::cql_binary_opcode(opcode), tracing::trace_state_ptr());
 
     // Null value
@@ -38,16 +37,16 @@ SEASTAR_THREAD_TEST_CASE(test_response_request_reader) {
     res.write_int(-2);
 
     // "Value" value
-    auto value = tests::random::get_bytes(tests::random::get_int<int16_t>(1024));
+    auto value = make_random_bytes(seastar::testing::random.get_int<int16_t>(1024));
     res.write_value(bytes_opt(value));
 
     // Name and value list
     auto names_and_values = boost::copy_range<std::vector<std::pair<sstring, bytes_opt>>>(
-        boost::irange<int16_t>(0, tests::random::get_int<int16_t>(16) + 16)
+        boost::irange<int16_t>(0, seastar::testing::random.get_int<int16_t>(16) + 16)
         | boost::adaptors::transformed([] (int) {
             return std::pair(
-                tests::random::get_sstring(),
-                !tests::random::get_int(4) ? bytes_opt() : bytes_opt(tests::random::get_bytes(tests::random::get_int<int16_t>(1024)))
+                make_random_string(),
+                !seastar::testing::random.get_int(4) ? bytes_opt() : bytes_opt(make_random_bytes(seastar::testing::random.get_int<int16_t>(1024)))
             );
         })
     );
@@ -59,18 +58,18 @@ SEASTAR_THREAD_TEST_CASE(test_response_request_reader) {
 
     // String list
     auto string_list = boost::copy_range<std::vector<sstring>>(
-        boost::irange<int16_t>(0, tests::random::get_int<int16_t>(16) + 16)
+        boost::irange<int16_t>(0, seastar::testing::random.get_int<int16_t>(16) + 16)
         | boost::adaptors::transformed([] (int) {
-            return tests::random::get_sstring();
+            return make_random_string();
         })
     );
     res.write_string_list(string_list);
 
     // String map
     auto string_map = boost::copy_range<std::map<sstring, sstring>>(
-        boost::irange<int16_t>(0, tests::random::get_int<int16_t>(16) + 16)
+        boost::irange<int16_t>(0, seastar::testing::random.get_int<int16_t>(16) + 16)
         | boost::adaptors::transformed([] (int) {
-            return std::pair(tests::random::get_sstring(), tests::random::get_sstring());
+            return std::pair(make_random_string(), make_random_string());
         })
     );
     res.write_string_map(string_map);

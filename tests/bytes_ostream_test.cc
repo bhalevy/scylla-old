@@ -29,7 +29,8 @@
 #include <boost/test/unit_test.hpp>
 #include "serializer_impl.hh"
 
-#include "tests/random-utils.hh"
+#include <seastar/testing/random_utils.hh>
+#include "tests/make_random_string.hh"
 
 void append_sequence(bytes_ostream& buf, int count) {
     for (int i = 0; i < count; i++) {
@@ -286,7 +287,7 @@ BOOST_AUTO_TEST_CASE(test_remove_suffix) {
     auto test = [] (size_t length, size_t suffix) {
         BOOST_TEST_MESSAGE("Testing buffer size " << length << " and suffix size " << suffix);
 
-        auto data = tests::random::get_bytes(length);
+        auto data = make_random_bytes(length);
         bytes_view view = data;
 
         bytes_ostream bo;
@@ -317,8 +318,8 @@ BOOST_AUTO_TEST_CASE(test_remove_suffix) {
     test(1'000'000, 999'999);
 
     for (auto i = 0; i < 25; i++) {
-        auto a = tests::random::get_int(128 * 1024);
-        auto b = tests::random::get_int(128 * 1024);
+        auto a = seastar::testing::random.get_int(128 * 1024);
+        auto b = seastar::testing::random.get_int(128 * 1024);
         test(std::max(a, b), std::min(a, b));
     }
 }
