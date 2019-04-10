@@ -28,6 +28,7 @@
 #include <seastar/core/app-template.hh>
 #include "schema_builder.hh"
 #include "release.hh"
+#include <seastar/testing/random_utils.hh>
 
 static const sstring table_name = "cf";
 
@@ -251,6 +252,7 @@ int main(int argc, char** argv) {
     namespace bpo = boost::program_options;
     app_template app;
     app.add_options()
+        ("random-seed", boost::program_options::value<random::result_type>(), "Random number generator seed")
         ("partitions", bpo::value<unsigned>()->default_value(10000), "number of partitions")
         ("write", "test write path instead of read path")
         ("delete", "test delete path instead of read path")
@@ -263,7 +265,18 @@ int main(int argc, char** argv) {
         ;
 
     return app.run(argc, argv, [&app] {
-        return do_with_cql_env([&app] (auto&& env) {
+        auto init = [&app] {
+            auto opt_seed = app.configuration()["random-seed"];
+            auto set_seed = opt_seed.empty() ? testing::random.reset() : testing::random.set_seed(opt_seed.as<random::result_type>());
+            return set_seed.then([] (random::result_type seed) {
+                std::cout << "random-seed=" << seed << '\n';
+                random::random_device.set_impl(make_shared<random::pseudo_random_device_impl>(testing::random));
+                return make_ready_future<>();
+            });
+        };
+
+        return init().then([&app] {
+          return do_with_cql_env([&app] (auto&& env) {
             auto cfg = test_config();
             cfg.partitions = app.configuration()["partitions"].as<unsigned>();
             cfg.duration_in_seconds = app.configuration()["duration"].as<unsigned>();
@@ -297,6 +310,7 @@ int main(int argc, char** argv) {
                 write_json_result(app.configuration()["json-result"].as<std::string>(), cfg, median, mad, max, min);
             }
             return make_ready_future<>();
+          });
         });
     });
 }
