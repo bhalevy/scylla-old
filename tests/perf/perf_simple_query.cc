@@ -171,7 +171,7 @@ future<std::vector<double>> do_test(cql_test_env& env, test_config& cfg) {
         if (cfg.counters) {
             return *make_counter_schema(ks_name);
         }
-        return schema({}, ks_name, "cf",
+        return schema(utils::make_random_uuid(), ks_name, "cf",
                 {{"KEY", bytes_type}},
                 {},
                 {{"C0", bytes_type}, {"C1", bytes_type}, {"C2", bytes_type}, {"C3", bytes_type}, {"C4", bytes_type}},

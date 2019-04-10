@@ -108,7 +108,7 @@ with_column_family(schema_ptr s, column_family::config cfg, noncopyable_function
 
 SEASTAR_TEST_CASE(test_mutation_is_applied) {
     return seastar::async([] {
-        auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
+        auto s = make_lw_shared(schema(utils::make_random_uuid(), some_keyspace, some_column_family,
             {{"p1", utf8_type}}, {{"c1", int32_type}}, {{"r1", int32_type}}, {}, utf8_type));
 
         auto mt = make_lw_shared<memtable>(s);
@@ -133,7 +133,7 @@ SEASTAR_TEST_CASE(test_mutation_is_applied) {
 }
 
 SEASTAR_TEST_CASE(test_multi_level_row_tombstones) {
-    auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
+    auto s = make_lw_shared(schema(utils::make_random_uuid(), some_keyspace, some_column_family,
         {{"p1", utf8_type}},
         {{"c1", int32_type}, {"c2", int32_type}, {"c3", int32_type}},
         {{"r1", int32_type}}, {}, utf8_type));
@@ -168,7 +168,7 @@ SEASTAR_TEST_CASE(test_multi_level_row_tombstones) {
 }
 
 SEASTAR_TEST_CASE(test_row_tombstone_updates) {
-    auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
+    auto s = make_lw_shared(schema(utils::make_random_uuid(), some_keyspace, some_column_family,
         {{"p1", utf8_type}}, {{"c1", int32_type}, {"c2", int32_type}}, {{"r1", int32_type}}, {}, utf8_type));
 
     auto key = partition_key::from_exploded(*s, {to_bytes("key1")});
@@ -211,7 +211,7 @@ collection_type_impl::mutation make_collection_mutation(tombstone t, bytes key1,
 SEASTAR_TEST_CASE(test_map_mutations) {
     return seastar::async([] {
         auto my_map_type = map_type_impl::get_instance(int32_type, utf8_type, true);
-        auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
+        auto s = make_lw_shared(schema(utils::make_random_uuid(), some_keyspace, some_column_family,
             {{"p1", utf8_type}}, {{"c1", int32_type}}, {}, {{"s1", my_map_type}}, utf8_type));
         auto mt = make_lw_shared<memtable>(s);
         auto key = partition_key::from_exploded(*s, {to_bytes("key1")});
@@ -248,7 +248,7 @@ SEASTAR_TEST_CASE(test_map_mutations) {
 SEASTAR_TEST_CASE(test_set_mutations) {
     return seastar::async([] {
         auto my_set_type = set_type_impl::get_instance(int32_type, true);
-        auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
+        auto s = make_lw_shared(schema(utils::make_random_uuid(), some_keyspace, some_column_family,
             {{"p1", utf8_type}}, {{"c1", int32_type}}, {}, {{"s1", my_set_type}}, utf8_type));
         auto mt = make_lw_shared<memtable>(s);
         auto key = partition_key::from_exploded(*s, {to_bytes("key1")});
@@ -285,7 +285,7 @@ SEASTAR_TEST_CASE(test_set_mutations) {
 SEASTAR_TEST_CASE(test_list_mutations) {
     return seastar::async([] {
         auto my_list_type = list_type_impl::get_instance(int32_type, true);
-        auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
+        auto s = make_lw_shared(schema(utils::make_random_uuid(), some_keyspace, some_column_family,
             {{"p1", utf8_type}}, {{"c1", int32_type}}, {}, {{"s1", my_list_type}}, utf8_type));
         auto mt = make_lw_shared<memtable>(s);
         auto key = partition_key::from_exploded(*s, {to_bytes("key1")});
@@ -323,7 +323,7 @@ SEASTAR_TEST_CASE(test_list_mutations) {
 SEASTAR_TEST_CASE(test_multiple_memtables_one_partition) {
     return seastar::async([] {
     storage_service_for_tests ssft;
-    auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
+    auto s = make_lw_shared(schema(utils::make_random_uuid(), some_keyspace, some_column_family,
         {{"p1", utf8_type}}, {{"c1", int32_type}}, {{"r1", int32_type}}, {}, utf8_type));
 
     auto cf_stats = make_lw_shared<::cf_stats>();
@@ -452,7 +452,7 @@ SEASTAR_TEST_CASE(test_flush_in_the_middle_of_a_scan) {
 
 SEASTAR_TEST_CASE(test_multiple_memtables_multiple_partitions) {
     return seastar::async([] {
-    auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
+    auto s = make_lw_shared(schema(utils::make_random_uuid(), some_keyspace, some_column_family,
             {{"p1", int32_type}}, {{"c1", int32_type}}, {{"r1", int32_type}}, {}, utf8_type));
 
     auto cf_stats = make_lw_shared<::cf_stats>();
@@ -986,7 +986,7 @@ SEASTAR_TEST_CASE(test_mutation_diff) {
 
 SEASTAR_TEST_CASE(test_large_blobs) {
     return seastar::async([] {
-        auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
+        auto s = make_lw_shared(schema(utils::make_random_uuid(), some_keyspace, some_column_family,
             {{"p1", utf8_type}}, {}, {}, {{"s1", bytes_type}}, utf8_type));
 
         auto mt = make_lw_shared<memtable>(s);
@@ -1496,7 +1496,7 @@ SEASTAR_TEST_CASE(test_trim_rows) {
 
 SEASTAR_TEST_CASE(test_collection_cell_diff) {
     return seastar::async([] {
-        auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
+        auto s = make_lw_shared(schema(utils::make_random_uuid(), some_keyspace, some_column_family,
             {{"p", utf8_type}}, {}, {{"v", list_type_impl::get_instance(bytes_type, true)}}, {}, utf8_type));
 
         auto& col = s->column_at(column_kind::regular_column, 0);

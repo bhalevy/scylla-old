@@ -246,7 +246,7 @@ future<> for_each_sstable_version(AsyncAction action) {
 
 inline schema_ptr composite_schema() {
     static thread_local auto s = [] {
-        schema_builder builder(make_lw_shared(schema({}, "tests", "composite",
+        schema_builder builder(make_lw_shared(schema(utils::make_random_uuid(), "tests", "composite",
         // partition key
         {{"name", bytes_type}, {"col1", bytes_type}},
         // clustering key
@@ -268,7 +268,7 @@ inline schema_ptr composite_schema() {
 inline schema_ptr set_schema() {
     static thread_local auto s = [] {
         auto my_set_type = set_type_impl::get_instance(bytes_type, false);
-        schema_builder builder(make_lw_shared(schema({}, "tests", "set_pk",
+        schema_builder builder(make_lw_shared(schema(utils::make_random_uuid(), "tests", "set_pk",
         // partition key
         {{"ss", my_set_type}},
         // clustering key
@@ -292,7 +292,7 @@ inline schema_ptr set_schema() {
 inline schema_ptr map_schema() {
     static thread_local auto s = [] {
         auto my_map_type = map_type_impl::get_instance(bytes_type, bytes_type, false);
-        schema_builder builder(make_lw_shared(schema({}, "tests", "map_pk",
+        schema_builder builder(make_lw_shared(schema(utils::make_random_uuid(), "tests", "map_pk",
         // partition key
         {{"ss", my_map_type}},
         // clustering key
@@ -316,7 +316,7 @@ inline schema_ptr map_schema() {
 inline schema_ptr list_schema() {
     static thread_local auto s = [] {
         auto my_list_type = list_type_impl::get_instance(bytes_type, false);
-        schema_builder builder(make_lw_shared(schema({}, "tests", "list_pk",
+        schema_builder builder(make_lw_shared(schema(utils::make_random_uuid(), "tests", "list_pk",
         // partition key
         {{"ss", my_list_type}},
         // clustering key
@@ -374,7 +374,7 @@ inline schema_ptr complex_schema() {
         auto my_fset_type = set_type_impl::get_instance(bytes_type, false);
         auto my_set_static_type = set_type_impl::get_instance(bytes_type, true);
 
-        schema_builder builder(make_lw_shared(schema({}, "tests", "complex_schema",
+        schema_builder builder(make_lw_shared(schema(utils::make_random_uuid(), "tests", "complex_schema",
         // partition key
         {{"key", bytes_type}},
         // clustering key
@@ -429,7 +429,7 @@ inline schema_ptr columns_schema() {
 
 inline schema_ptr compact_simple_dense_schema() {
     static thread_local auto s = [] {
-        schema_builder builder(make_lw_shared(schema({}, "tests", "compact_simple_dense",
+        schema_builder builder(make_lw_shared(schema(utils::make_random_uuid(), "tests", "compact_simple_dense",
         // partition key
         {{"ks", bytes_type}},
         // clustering key
@@ -450,7 +450,7 @@ inline schema_ptr compact_simple_dense_schema() {
 
 inline schema_ptr compact_dense_schema() {
     static thread_local auto s = [] {
-        schema_builder builder(make_lw_shared(schema({}, "tests", "compact_simple_dense",
+        schema_builder builder(make_lw_shared(schema(utils::make_random_uuid(), "tests", "compact_simple_dense",
         // partition key
         {{"ks", bytes_type}},
         // clustering key
@@ -471,7 +471,7 @@ inline schema_ptr compact_dense_schema() {
 
 inline schema_ptr compact_sparse_schema() {
     static thread_local auto s = [] {
-        schema_builder builder(make_lw_shared(schema({}, "tests", "compact_sparse",
+        schema_builder builder(make_lw_shared(schema(utils::make_random_uuid(), "tests", "compact_sparse",
         // partition key
         {{"ks", bytes_type}},
         // clustering key
