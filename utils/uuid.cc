@@ -22,7 +22,7 @@
 
 #include "UUID.hh"
 #include <seastar/net/byteorder.hh>
-#include <random>
+#include <seastar/core/random.hh>
 #include <boost/iterator/function_input_iterator.hpp>
 #include <boost/algorithm/string.hpp>
 #include <string>
@@ -34,7 +34,7 @@ namespace utils {
 
 UUID
 make_random_uuid() {
-    static thread_local std::mt19937_64 engine(std::random_device().operator()());
+    static thread_local std::mt19937_64 engine(seastar::random::random_device());
     static thread_local std::uniform_int_distribution<uint64_t> dist;
     uint64_t msb, lsb;
     msb = dist(engine);
