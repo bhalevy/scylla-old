@@ -444,7 +444,7 @@ SEASTAR_TEST_CASE(test_sstable_can_write_and_read_range_tombstone) {
         auto wait_bg = seastar::defer([] { sstables::await_background_jobs().get(); });
         storage_service_for_tests ssft;
         auto dir = tmpdir();
-        auto s = make_lw_shared(schema({}, "ks", "cf",
+        auto s = make_lw_shared(schema(utils::make_random_uuid(), "ks", "cf",
             {{"p1", utf8_type}}, {{"c1", int32_type}}, {{"r1", int32_type}}, {}, utf8_type));
 
         auto key = partition_key::from_exploded(*s, {to_bytes(make_local_key(s))});
