@@ -35,6 +35,7 @@
 #include "partition_slice_builder.hh"
 #include <seastar/core/reactor.hh>
 #include <seastar/core/units.hh>
+#include <seastar/util/random.hh>
 #include "sstables/compaction_manager.hh"
 #include "transport/messages/result_message.hh"
 #include "sstables/shared_index_lists.hh"
@@ -1727,6 +1728,7 @@ auto make_compaction_disabling_guard(std::vector<table*> tables) {
 int main(int argc, char** argv) {
     namespace bpo = boost::program_options;
     app.add_options()
+        ("random-seed", boost::program_options::value<random::result_type>(), "Random number generator seed")
         ("run-tests", bpo::value<std::vector<std::string>>()->default_value(
                 boost::copy_range<std::vector<std::string>>(
                     test_groups | boost::adaptors::transformed([] (auto&& tc) { return tc.name; }))
@@ -1810,7 +1812,17 @@ int main(int argc, char** argv) {
 
         std::cout << "Data directory: " << db_cfg.data_file_directories() << "\n";
 
-        return do_with_cql_env([] (cql_test_env& env) {
+        auto init = [] {
+            auto conf_seed = app.configuration()["random-seed"];
+            auto seed = conf_seed.empty() ? std::random_device()() : conf_seed.as<random::result_type>();
+            return random::random_device::set_seed_on_all(seed).then([] (random::result_type seed) {
+                std::cout << "random-seed=" << seed << '\n';
+                return make_ready_future<>();
+            });
+        };
+
+        return init().then([db_cfg = std::move(db_cfg)] {
+          return do_with_cql_env([] (cql_test_env& env) {
             return seastar::async([&env] {
                 cql_env = &env;
                 sstring name = app.configuration()["name"].as<std::string>();
@@ -1894,5 +1906,6 @@ int main(int argc, char** argv) {
         }, db_cfg).then([] {
             return errors_found ? -1 : 0;
         });
+      });
     });
 }
