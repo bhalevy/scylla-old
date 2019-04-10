@@ -55,6 +55,7 @@ column_family_for_tests::column_family_for_tests()
     : column_family_for_tests(
         schema_builder(some_keyspace, some_column_family)
             .with_column(utf8_type->decompose("p1"), utf8_type, column_kind::partition_key)
+            .set_uuid(utils::make_random_uuid())
             .build()
     )
 { }

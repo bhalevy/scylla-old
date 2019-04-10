@@ -153,7 +153,7 @@ SEASTAR_THREAD_TEST_CASE(sstable_resharding_strategy_tests) {
     test_env env;
 
     for (const auto version : all_sstable_versions) {
-        auto s = make_lw_shared(schema({}, "ks", "cf", {{"p1", utf8_type}}, {}, {}, {}, utf8_type));
+        auto s = make_lw_shared(schema(utils::make_random_uuid(), "ks", "cf", {{"p1", utf8_type}}, {}, {}, {}, utf8_type));
         auto get_sstable = [&] (int64_t gen, sstring first_key, sstring last_key) mutable {
             auto sst = env.make_sstable(s, "", gen, version, sstables::sstable::format_types::big);
             stats_metadata stats = {};

@@ -159,7 +159,7 @@ BOOST_AUTO_TEST_CASE(test_serialization) {
 
 BOOST_AUTO_TEST_CASE(test_from_nodetool_style_string) {
     auto s1 = make_lw_shared<schema>(
-    schema({}, "", "",
+    schema(utils::make_random_uuid(), "", "",
         {
             {"c1", utf8_type}
         }, {
@@ -174,7 +174,7 @@ BOOST_AUTO_TEST_CASE(test_from_nodetool_style_string) {
     BOOST_REQUIRE(key1.equal(*s1, key2));
 
     auto s2 = make_lw_shared<schema>(
-    schema({}, "", "",
+    schema(utils::make_random_uuid(), "", "",
         {
             {"c1", utf8_type}, {"c2", utf8_type}
         }, {
